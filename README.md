@@ -168,3 +168,70 @@ Kalau sudah yakin jalan, ganti lagi ke `0 1 * * *` (jam 1 pagi).
 
 ---
 
+## Seting Jam DI Ubuntu
+
+
+### 1. Cek Waktu Saat Ini
+
+Jalankan:
+
+```bash
+timedatectl
+```
+
+Hasilnya akan menunjukkan:
+
+* Local time (jam lokal)
+* Time zone (zona waktu)
+* NTP service aktif atau tidak
+
+---
+
+### 2. Atur Zona Waktu
+
+Misalnya untuk **WIB (Asia/Jakarta)**:
+
+```bash
+sudo timedatectl set-timezone Asia/Jakarta
+```
+
+Cek lagi:
+
+```bash
+timedatectl
+```
+
+---
+
+### 3. Sinkronisasi dengan NTP
+
+Agar jam otomatis benar:
+
+```bash
+sudo timedatectl set-ntp true
+```
+
+Ini akan mengaktifkan sinkronisasi dengan server waktu internet.
+
+---
+
+### 4. Atur Jam Manual (Jika Perlu)
+
+Kalau VPS tidak bisa NTP atau butuh jam manual:
+
+```bash
+sudo timedatectl set-time "2025-09-29 19:30:00"
+```
+
+---
+
+### 5. Simpan ke Hardware Clock
+
+Agar reboot tidak mengubah jam:
+
+```bash
+sudo hwclock --systohc
+```
+
+---
+
