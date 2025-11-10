@@ -36,15 +36,15 @@ Buat file script `backup.sh`:
 #!/bin/bash
 
 # === Konfigurasi ===
-BOT_TOKEN="123456:ABC-DEF..."   # ganti dengan token bot kamu
-CHAT_ID="123456789"             # ganti dengan chat_id kamu
+BOT_TOKEN="8376772650:AAFKk6dpGu91zUJJetNzN0helZihdob_4oc"   # ganti dengan token bot kamu
+CHAT_ID="8264681468"             # ganti dengan chat_id kamu
 BACKUP_DIR="/root/backup"
 FILE_NAME="backup-$(date +%F-%H%M).tar.gz"
 TARGET="$BACKUP_DIR/$FILE_NAME"
 
 # === Buat backup (contoh: backup folder /app/data) ===
 mkdir -p $BACKUP_DIR
-tar -czf $TARGET /app/data
+tar -czf $TARGET /var/lib/docker/volumes/uptime-kuma/
 
 # === Kirim ke Telegram ===
 curl -F document=@"$TARGET" \
