@@ -1,237 +1,257 @@
-# bot-backup-vps-script
 
-Ada 2 langkah besar:
+# 📦 **bot-backup-vps-script**
 
----
-
-## 1. Buat Bot Telegram & Dapatkan Chat ID
-
-1. Buka Telegram, cari **@BotFather**.
-2. Buat bot baru dengan perintah:
-
-   ```
-   /newbot
-   ```
-
-   Ikuti instruksi, nanti kamu dapat **token bot** (contoh: `123456:ABC-DEF...`).
-3. Invite bot itu ke grup/channel kamu (kalau mau dikirim ke grup).
-4. Cari **chat\_id** dengan kirim pesan ke bot lalu buka:
-
-   ```
-   https://api.telegram.org/botTOKEN/getUpdates
-   ```
-
-   (ganti `TOKEN` dengan token bot tadi).
-   Nanti akan muncul JSON, di dalamnya ada `"chat":{"id": ... }` → itu chat\_id.
+![License](https://img.shields.io/github/license/heruhendri/bot-backup-vps-script)
+![Stars](https://img.shields.io/github/stars/heruhendri/bot-backup-vps-script?style=social)
+![Forks](https://img.shields.io/github/forks/heruhendri/bot-backup-vps-script?style=social)
+![Issues](https://img.shields.io/github/issues/heruhendri/bot-backup-vps-script)
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
 
 ---
 
-## 2. Script Backup & Kirim ke Telegram
+# 🛡 **Bot Backup VPS – Telegram Notifier**
 
-Misalnya kamu ingin backup file `/root/backup/kuma.tar.gz` lalu kirim otomatis.
+Script backup otomatis untuk VPS yang Anda kontrol, dengan fitur canggih:
 
-Buat file script `backup.sh`:
+### ✨ Fitur Utama
+
+* 🔥 **Multi-folder backup** (bisa backup banyak folder sekaligus)
+* 🔥 **Backup otomatis database MySQL & PostgreSQL**
+* 🔥 **Notifikasi Telegram** (status sukses/gagal)
+* 🔥 **Service systemd (daemon)** → berjalan otomatis 24/7
+* 🔥 **Cron backup otomatis**
+* 🔥 **Auto-clean retention backup** (agar tidak menumpuk)
+* 🔥 **Konfigurasi mudah tanpa edit manual**
+* 🔥 **Installer otomatis dengan curl**
+* 🔥 **Auto-delete installer setelah selesai**
+
+---
+
+# 🚀 **Instalasi Cepat**
+
+Cukup satu perintah:
 
 ```bash
-#!/bin/bash
+bash <(curl -s https://raw.githubusercontent.com/heruhendri/bot-backup-vps-script/master/install-backupvps-telegram.sh)
+```
 
-# === Konfigurasi ===
-BOT_TOKEN="8376772650:AAFKk6dpGu91zUJJetNzN0helZihdob_4oc"   # ganti dengan token bot kamu
-CHAT_ID="8264681468"             # ganti dengan chat_id kamu
-BACKUP_DIR="/root/backup"
-FILE_NAME="backup-$(date +%F-%H%M).tar.gz"
-TARGET="$BACKUP_DIR/$FILE_NAME"
+Installer akan menanyakan:
 
-# === Buat backup (contoh: backup folder /app/data) ===
-mkdir -p $BACKUP_DIR
-tar -czf $TARGET /var/lib/docker/volumes/uptime-kuma/
+* Folder yang ingin di-backup (bisa lebih dari satu)
+* Bot Token Telegram
+* Chat ID Telegram
+* Mengaktifkan MySQL backup?
+* Mengaktifkan PostgreSQL backup?
+* Retention (berapa hari backup disimpan)
+* Cron schedule (jam & menit)
+* Timezone server
+* Service systemd akan dibuat otomatis
 
-# === Kirim ke Telegram ===
-curl -F document=@"$TARGET" \
-     -F caption="Backup berhasil: $FILE_NAME" \
-     "https://api.telegram.org/bot$BOT_TOKEN/sendDocument?chat_id=$CHAT_ID"
+---
+
+# 🧠 **Arsitektur Backup System**
+
+Berikut diagram arsitektur:
+
+```mermaid
+flowchart TD
+    A[VPS Server] -->|Backup Folders| B[Backup Engine]
+    A -->|MySQL Dump| B
+    A -->|PostgreSQL Dump| B
+
+    B -->|Compress .tar.gz| C[Storage /root/backup]
+    B -->|Send Status + File| D[Telegram Bot API]
+
+    C -->|Cleanup Old Files| B
+
+    E[Cronjob] --> B
+    F[systemd Service] --> B
+```
+
+Diagram ini menunjukkan:
+
+* Server melakukan backup folder + database
+* Dicompress → disimpan → dikirim ke Telegram
+* Cron + systemd memastikan selalu berjalan
+
+---
+
+# 📝 **Penjelasan Script Utama**
+
+### 1️⃣ **Konfigurasi & Input User**
+
+Installer meminta informasi penting seperti:
+
+* Token bot Telegram
+* Chat ID
+* Folder yang ingin di-backup
+* Apakah ingin backup MySQL/Postgres
+* Timezone
+* Jadwal cron
+
+Konfigurasi disimpan di:
+
+```
+/opt/auto-backup/config.conf
 ```
 
 ---
 
-## 3. Jadwalkan dengan Cron
+### 2️⃣ **Backup Multi-Folder**
 
-Agar otomatis jalan tiap hari (misal jam 01:00 pagi):
+Semua folder yang dimasukkan user akan diproses satu per satu:
 
-```bash
-crontab -e
+* Di-zip (`tar.gz`)
+* Digabung dalam satu paket
+
+---
+
+### 3️⃣ **Backup Database**
+
+Jika diaktifkan:
+
+#### 🔹 MySQL
+
+```
+mysqldump --all-databases
 ```
 
-Tambahkan baris:
+#### 🔹 PostgreSQL
 
 ```
-0 1 * * * /bin/bash /root/backup.sh
-```
-
----
-
-## 4. Hasil
-
-* Setiap jam 01:00, VPS akan membuat file backup.
-* File backup otomatis dikirim ke bot Telegram.
-* Kamu bisa cek log di Telegram langsung.
-
----
-
-## Jika Terjadi Eror
-root@server:~# crontab -e
-no crontab for root - using an empty one
-
-Select an editor.  To change later, run 'select-editor'.
-  1. /bin/nano        <---- easiest
-  2. /usr/bin/vim.basic
-  3. /bin/ed
-
-Choose 1-3 [1]: 
-
-
-
-👉 Saran: ketik **1** (nano, paling gampang).
-
-Jadi langkahnya:
-
-1. Ketik:
-
-   ```
-   1
-   ```
-
-   lalu Enter.
-
-2. Setelah itu, file crontab kosong akan terbuka di editor `nano`.
-
-3. Tambahkan jadwal cron kamu, misalnya (backup setiap jam 01:00):
-
-   ```
-   0 1 * * * /bin/bash /root/backup.sh
-   ```
-
-4. Simpan di nano:
-
-   * Tekan **CTRL+O** (untuk save), lalu Enter.
-   * Tekan **CTRL+X** (untuk keluar).
-
-5. Pastikan script `backup.sh` kamu sudah diberi izin eksekusi:
-
-   ```bash
-   chmod +x /root/backup.sh
-   ```
-
-6. Cron akan otomatis menjalankan script sesuai jadwal.
-
----
-
-## Cara Testnya
-
-Mantap, kalau mau **test langsung** tanpa tunggu cron jalan, kamu bisa eksekusi script manual:
-
-1. Pastikan script sudah executable:
-
-   ```bash
-   chmod +x /root/backup.sh
-   ```
-
-2. Jalankan langsung:
-
-   ```bash
-   /root/backup.sh
-   ```
-
-3. Kalau script benar, dia akan:
-
-   * Membuat file backup (contoh: `/root/backup/backup-2025-08-19-1430.tar.gz`).
-   * Mengirim file tersebut ke bot Telegram kamu.
-
----
-
-🔍 Kalau mau lihat detail error (kalau ada), jalankan dengan `bash -x`:
-
-```bash
-bash -x /root/backup.sh
+pg_dumpall
 ```
 
 ---
 
-👉 Kalau mau test cron juga, kamu bisa set jadwal per menit supaya cepat terlihat hasilnya. Edit crontab:
+### 4️⃣ **Notifikasi Telegram**
 
-```bash
-* * * * * /bin/bash /root/backup.sh
-```
+Mengirim:
 
-Itu artinya script dijalankan **setiap menit**.
-Kalau sudah yakin jalan, ganti lagi ke `0 1 * * *` (jam 1 pagi).
-
----
-
-## Seting Jam DI Ubuntu
-
-
-### 1. Cek Waktu Saat Ini
-
-Jalankan:
-
-```bash
-timedatectl
-```
-
-Hasilnya akan menunjukkan:
-
-* Local time (jam lokal)
-* Time zone (zona waktu)
-* NTP service aktif atau tidak
+* File backup
+* Status sukses/gagal
+* Informasi ukuran file
+* Informasi timestamp
 
 ---
 
-### 2. Atur Zona Waktu
+### 5️⃣ **Retention Auto Clean**
 
-Misalnya untuk **WIB (Asia/Jakarta)**:
+Backup lama dihapus otomatis:
 
-```bash
-sudo timedatectl set-timezone Asia/Jakarta
 ```
-
-Cek lagi:
-
-```bash
-timedatectl
+find /root/backup -mtime +RETENTION -exec rm -f {} \;
 ```
 
 ---
 
-### 3. Sinkronisasi dengan NTP
+### 6️⃣ **Systemd Service (Daemon Mode)**
 
-Agar jam otomatis benar:
+Service otomatis dibuat:
 
-```bash
-sudo timedatectl set-ntp true
+```
+/etc/systemd/system/auto-backup.service
 ```
 
-Ini akan mengaktifkan sinkronisasi dengan server waktu internet.
+Service berjalan otomatis setiap boot dan dapat dicek via:
 
----
-
-### 4. Atur Jam Manual (Jika Perlu)
-
-Kalau VPS tidak bisa NTP atau butuh jam manual:
-
-```bash
-sudo timedatectl set-time "2025-09-29 19:30:00"
+```
+systemctl status auto-backup
 ```
 
 ---
 
-### 5. Simpan ke Hardware Clock
+### 7️⃣ **Cron Scheduling**
 
-Agar reboot tidak mengubah jam:
+Backup dilakukan otomatis pada jam yang dipilih user.
 
-```bash
-sudo hwclock --systohc
+---
+
+### 8️⃣ **Installer Self-Delete**
+
+Setelah instalasi berhasil, file akan menghapus dirinya:
+
+```
+rm -f install-backupvps-telegram.sh
 ```
 
 ---
+
+# 🔧 Mengontrol Service
+
+### Start service
+
+```
+systemctl start auto-backup
+```
+
+### Stop service
+
+```
+systemctl stop auto-backup
+```
+
+### Restart
+
+```
+systemctl restart auto-backup
+```
+
+### Cek status
+
+```
+systemctl status auto-backup
+```
+
+---
+
+# 📂 Lokasi File
+
+| Jenis           | Lokasi                                    |
+| --------------- | ----------------------------------------- |
+| Config          | `/opt/auto-backup/config.conf`            |
+| Script utama    | `/opt/auto-backup/backup.sh`              |
+| Folder backup   | `/root/backup/`                           |
+| Systemd service | `/etc/systemd/system/auto-backup.service` |
+
+---
+
+# 🙌 Kontribusi
+
+Pull request & issue sangat dipersilakan!
+Repository:
+👉 **[https://github.com/heruhendri/bot-backup-vps-script](https://github.com/heruhendri/bot-backup-vps-script)**
+
+---
+
+# 📜 Lisensi
+
+MIT License.
+
+---
+
+
+
+## Penjelasan singkat
+
+* Installer membuat `/opt/auto-backup` berisi:
+
+  * `config.conf` (tanpa password terbuka)
+  * `mysql.conf` / `pg.conf` (permission 600) bila diisi
+  * `bin/backup-runner.sh` — script yang melakukan dump, mengcompress, menghapus backup lama, mengirim Telegram
+* Systemd:
+
+  * `auto-backup.service` menjalankan runner (oneshot)
+  * `auto-backup.timer` menjadwalkan service sesuai `OnCalendar` yang Anda berikan
+* Logging ke `/var/log/auto-backup.log` dan juga ke `journalctl -u auto-backup.service`
+
+## Tips & Troubleshooting
+
+* Pastikan `curl`, `tar`, `mysqldump` (untuk MySQL), `pg_dump`/`pg_dumpall` (untuk Postgres) terpasang bila diperlukan.
+* Untuk melihat log: `sudo journalctl -u auto-backup.service --no-pager` atau `tail -n 100 /var/log/auto-backup.log`
+* Jika Anda ingin mengganti jadwal: edit `/etc/systemd/system/auto-backup.timer` lalu `sudo systemctl daemon-reload && sudo systemctl restart auto-backup.timer`
+* Jika ingin menambahkan folder baru, edit `/opt/auto-backup/config.conf` (ubah FOLDERS_RAW) dan restart timer/service as needed.
+
+---
+
 
