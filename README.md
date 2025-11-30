@@ -107,9 +107,9 @@ Menu yang tersedia:
 
 ### Semua update otomatis:
 
-✔ Mengubah config file
-✔ Reload systemd
-✔ Timer restart
+* ✔ Mengubah config file
+* ✔ Reload systemd
+* ✔ Timer restart
 
 Tidak perlu install ulang dan konfigurasi tidak hilang.
 
@@ -174,8 +174,8 @@ Installer melakukan:
 
 Setelah instalasi:
 
-✔ Tidak perlu jalankan ulang installer
-✔ Seluruh konfigurasi tersimpan
+* ✔ Tidak perlu jalankan ulang installer
+* ✔ Seluruh konfigurasi tersimpan
 
 ---
 
