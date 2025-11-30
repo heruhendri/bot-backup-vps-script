@@ -1,0 +1,76 @@
+name: CI - Backup VPS Bot Telegram
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+
+  # ================================
+  # 1. ShellCheck Linting
+  # ================================
+  lint:
+    name: ShellCheck Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Run ShellCheck on all .sh files
+        run: |
+          echo "Running ShellCheck..."
+          shopt -s globstar
+          shellcheck **/*.sh || true
+
+  # ================================
+  # 2. Test Bash Syntax (Dry Run)
+  # ================================
+  test:
+    name: Syntax Test (bash -n)
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Test bash script syntax
+        run: |
+          echo "Testing bash scripts..."
+          shopt -s globstar
+          for f in **/*.sh; do
+            echo "Checking $f"
+            bash -n "$f"
+          done
+
+  # ================================
+  # 3. CodeQL Security Scan
+  # ================================
+  codeql:
+    name: CodeQL Security Scan
+    runs-on: ubuntu-latest
+    needs: test
+
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: shell
+
+      - name: No Build Needed
+        run: echo "Shell scripts do not require building"
+
+      - name: Run CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
