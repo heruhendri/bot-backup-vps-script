@@ -123,10 +123,10 @@ flowchart TD
     A -->|MySQL Dump| B
     A -->|PostgreSQL Dump| B
 
-    B -->|Compress .tar.gz| C[Backup Storage /opt/auto-backup/backups]
+    B -->|Compress .tar.gz| C[Backup Storage: /opt/auto-backup/backups]
     B -->|Send File + Status| D[Telegram Bot API]
 
-    C -->|Auto Clean (Retention)| B
+    C -->|"Auto Clean / Retention"| B
 
     E[Systemd Timer] -->|OnCalendar| B
     F[Systemd Service] --> B
