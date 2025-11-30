@@ -12,17 +12,50 @@ read -p "Masukkan TOKEN Bot Telegram: " BOT_TOKEN
 read -p "Masukkan CHAT_ID Telegram: " CHAT_ID
 read -p "Masukkan folder yang mau di-backup (comma separated, contoh: /etc,/var/www): " FOLDERS_RAW
 
+# ======================================================
+#  MYSQL MULTI CONFIG INPUT
+# ======================================================
 read -p "Backup MySQL? (y/n): " USE_MYSQL
+MYSQL_MULTI_CONF=""
 if [[ "$USE_MYSQL" == "y" ]]; then
-    read -p "MySQL Host (default: localhost): " MYSQL_HOST
-    MYSQL_HOST=${MYSQL_HOST:-localhost}
-
-    read -p "MySQL Username: " MYSQL_USER
-    read -s -p "MySQL Password: " MYSQL_PASS
     echo ""
-    read -p "Daftar database (comma separated) atau 'all' untuk seluruh DB: " MYSQL_DB_LIST
+    read -p "Berapa konfigurasi MySQL yang ingin Anda tambahkan? " MYSQL_COUNT
+    
+    for ((i=1; i<=MYSQL_COUNT; i++)); do
+        echo ""
+        echo "📌 Konfigurasi MySQL ke-$i"
+        
+        read -p "MySQL Host (default: localhost): " MYSQL_HOST
+        MYSQL_HOST=${MYSQL_HOST:-localhost}
+
+        read -p "MySQL Username: " MYSQL_USER
+        read -s -p "MySQL Password: " MYSQL_PASS
+        echo ""
+
+        echo "Mode backup database:"
+        echo "1) Backup SEMUA database"
+        echo "2) Pilih database tertentu"
+        read -p "Pilih (1/2): " MODE
+
+        if [[ "$MODE" == "1" ]]; then
+            DBLIST="all"
+        else
+            read -p "Masukkan daftar DB (comma separated, ex: db1,db2): " DBLIST
+        fi
+
+        ENTRY="${MYSQL_USER}:${MYSQL_PASS}@${MYSQL_HOST}:${DBLIST}"
+
+        if [[ -z "$MYSQL_MULTI_CONF" ]]; then
+            MYSQL_MULTI_CONF="$ENTRY"
+        else
+            MYSQL_MULTI_CONF="${MYSQL_MULTI_CONF};${ENTRY}"
+        fi
+    done
 fi
 
+# ======================================================
+#  POSTGRES INPUT
+# ======================================================
 read -p "Backup PostgreSQL? (y/n): " USE_PG
 read -p "Retention (berapa hari file backup disimpan): " RETENTION_DAYS
 read -p "Timezone (contoh: Asia/Jakarta): " TZ
@@ -42,10 +75,7 @@ CHAT_ID="$CHAT_ID"
 FOLDERS_RAW="$FOLDERS_RAW"
 
 USE_MYSQL="$USE_MYSQL"
-MYSQL_HOST="$MYSQL_HOST"
-MYSQL_USER="$MYSQL_USER"
-MYSQL_PASS="$MYSQL_PASS"
-MYSQL_DB_LIST="$MYSQL_DB_LIST"
+MYSQL_MULTI_CONF="$MYSQL_MULTI_CONF"
 
 USE_PG="$USE_PG"
 RETENTION_DAYS="$RETENTION_DAYS"
@@ -83,24 +113,41 @@ for f in "${FOLDERS[@]}"; do
 done
 
 # ----------------------------
-#  BACKUP MYSQL (MULTI-DB)
+#  BACKUP MYSQL MULTI CONFIG
 # ----------------------------
 if [[ "$USE_MYSQL" == "y" ]]; then
     mkdir -p "$TMP_DIR/mysql"
 
-    # GLOBAL MYSQL ARGS
-    MYSQL_ARGS="-h$MYSQL_HOST -u$MYSQL_USER -p$MYSQL_PASS"
+    IFS=';' read -r -a MYSQL_ITEMS <<< "$MYSQL_MULTI_CONF"
 
-    if [[ "$MYSQL_DB_LIST" == "all" ]]; then
-        echo "[MySQL] Backup ALL databases..."
-        mysqldump $MYSQL_ARGS --all-databases > "$TMP_DIR/mysql/all_databases.sql" 2>/dev/null
-    else
-        IFS=',' read -r -a MYSQL_DBS <<< "$MYSQL_DB_LIST"
-        for DB in "${MYSQL_DBS[@]}"; do
-            echo "[MySQL] Backup database: $DB"
-            mysqldump $MYSQL_ARGS "$DB" > "$TMP_DIR/mysql/$DB.sql" 2>/dev/null
-        done
-    fi
+    for ITEM in "${MYSQL_ITEMS[@]}"; do
+        # Format: user:pass@host:db1,db2
+        USERPASS=$(echo "$ITEM" | cut -d'@' -f1)
+        HOSTDB=$(echo "$ITEM" | cut -d'@' -f2)
+
+        MYSQL_USER=$(echo "$USERPASS" | cut -d':' -f1)
+        MYSQL_PASS=$(echo "$USERPASS" | cut -d':' -f2)
+
+        MYSQL_HOST=$(echo "$HOSTDB" | cut -d':' -f1)
+        MYSQL_DB_LIST=$(echo "$HOSTDB" | cut -d':' -f2)
+
+        MYSQL_ARGS="-h$MYSQL_HOST -u$MYSQL_USER -p$MYSQL_PASS"
+
+        # backup semua DB
+        if [[ "$MYSQL_DB_LIST" == "all" ]]; then
+            OUTFILE="$TMP_DIR/mysql/${MYSQL_USER}@${MYSQL_HOST}_ALL.sql"
+            echo "[MySQL] Backup ALL DB -> $OUTFILE"
+            mysqldump $MYSQL_ARGS --all-databases > "$OUTFILE" 2>/dev/null
+        else
+            # backup masing-masing DB
+            IFS=',' read -r -a DBARR <<< "$MYSQL_DB_LIST"
+            for DB in "${DBARR[@]}"; do
+                OUTFILE="$TMP_DIR/mysql/${MYSQL_USER}@${MYSQL_HOST}_${DB}.sql"
+                echo "[MySQL] Backup DB $DB -> $OUTFILE"
+                mysqldump $MYSQL_ARGS "$DB" > "$OUTFILE" 2>/dev/null
+            done
+        fi
+    done
 fi
 
 # ----------------------------
