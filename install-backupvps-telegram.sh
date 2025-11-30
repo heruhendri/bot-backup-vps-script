@@ -11,7 +11,18 @@ echo "========================================="
 read -p "Masukkan TOKEN Bot Telegram: " BOT_TOKEN
 read -p "Masukkan CHAT_ID Telegram: " CHAT_ID
 read -p "Masukkan folder yang mau di-backup (comma separated, contoh: /etc,/var/www): " FOLDERS_RAW
+
 read -p "Backup MySQL? (y/n): " USE_MYSQL
+if [[ "$USE_MYSQL" == "y" ]]; then
+    read -p "MySQL Host (default: localhost): " MYSQL_HOST
+    MYSQL_HOST=${MYSQL_HOST:-localhost}
+
+    read -p "MySQL Username: " MYSQL_USER
+    read -s -p "MySQL Password: " MYSQL_PASS
+    echo ""
+    read -p "Daftar database (comma separated) atau 'all' untuk seluruh DB: " MYSQL_DB_LIST
+fi
+
 read -p "Backup PostgreSQL? (y/n): " USE_PG
 read -p "Retention (berapa hari file backup disimpan): " RETENTION_DAYS
 read -p "Timezone (contoh: Asia/Jakarta): " TZ
@@ -29,7 +40,13 @@ cat <<EOF > "$CONFIG_FILE"
 BOT_TOKEN="$BOT_TOKEN"
 CHAT_ID="$CHAT_ID"
 FOLDERS_RAW="$FOLDERS_RAW"
+
 USE_MYSQL="$USE_MYSQL"
+MYSQL_HOST="$MYSQL_HOST"
+MYSQL_USER="$MYSQL_USER"
+MYSQL_PASS="$MYSQL_PASS"
+MYSQL_DB_LIST="$MYSQL_DB_LIST"
+
 USE_PG="$USE_PG"
 RETENTION_DAYS="$RETENTION_DAYS"
 TZ="$TZ"
@@ -66,11 +83,24 @@ for f in "${FOLDERS[@]}"; do
 done
 
 # ----------------------------
-#  BACKUP MYSQL
+#  BACKUP MYSQL (MULTI-DB)
 # ----------------------------
 if [[ "$USE_MYSQL" == "y" ]]; then
     mkdir -p "$TMP_DIR/mysql"
-    mysqldump --all-databases > "$TMP_DIR/mysql/all.sql" 2>/dev/null
+
+    # GLOBAL MYSQL ARGS
+    MYSQL_ARGS="-h$MYSQL_HOST -u$MYSQL_USER -p$MYSQL_PASS"
+
+    if [[ "$MYSQL_DB_LIST" == "all" ]]; then
+        echo "[MySQL] Backup ALL databases..."
+        mysqldump $MYSQL_ARGS --all-databases > "$TMP_DIR/mysql/all_databases.sql" 2>/dev/null
+    else
+        IFS=',' read -r -a MYSQL_DBS <<< "$MYSQL_DB_LIST"
+        for DB in "${MYSQL_DBS[@]}"; do
+            echo "[MySQL] Backup database: $DB"
+            mysqldump $MYSQL_ARGS "$DB" > "$TMP_DIR/mysql/$DB.sql" 2>/dev/null
+        done
+    fi
 fi
 
 # ----------------------------
