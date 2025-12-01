@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# ======================================================
+#  AUTO BACKUP VPS — TELEGRAM BOT INSTALLER (FIXED)
+# ======================================================
+
 # Warna
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'
@@ -21,8 +25,8 @@ echo ""
 
 # Cek Root
 if [ "${EUID}" -ne 0 ]; then
-		echo -e "${RED}Error: Script ini harus dijalankan sebagai root.${NC}"
-		exit 1
+    echo -e "${RED}Error: Script ini harus dijalankan sebagai root.${NC}"
+    exit 1
 fi
 
 INSTALL_DIR="/opt/auto-backup"
@@ -42,6 +46,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
     
     if [[ "$REPLACE_CONF" == "n" || "$REPLACE_CONF" == "N" ]]; then
         echo -e "${GREEN}[OK] Menggunakan konfigurasi yang sudah ada.${NC}"
+        # Load config lama untuk memastikan variabel tersedia
         source "$CONFIG_FILE"
         SKIP_INPUT=true
     else
@@ -130,7 +135,12 @@ fi
 cat <<'EOF' > "$INSTALL_DIR/backup-runner.sh"
 #!/bin/bash
 CONFIG_FILE="/opt/auto-backup/config.conf"
-source "$CONFIG_FILE"
+if [[ -f "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+else
+    echo "Config not found."
+    exit 1
+fi
 
 export TZ="$TZ"
 
@@ -266,7 +276,8 @@ PURPLE='\033[0;35m'
 NC='\033[0m'
 
 if [[ ! -f "$CONFIG" ]]; then
-    echo -e "${RED}Config file not found!${NC}"
+    echo -e "${RED}Config file not found in $CONFIG${NC}"
+    echo "Silahkan jalankan installer ulang."
     exit 1
 fi
 
@@ -297,14 +308,18 @@ pause() {
 
 function run_backup_now() {
     echo -e "${GREEN}Memulai proses backup manual...${NC}"
-    bash "$RUNNER"
-    echo -e "${GREEN}Backup selesai! Cek bot telegram Anda.${NC}"
+    if [[ -f "$RUNNER" ]]; then
+        bash "$RUNNER"
+        echo -e "${GREEN}Backup selesai! Cek bot telegram Anda.${NC}"
+    else
+        echo -e "${RED}File runner tidak ditemukan!${NC}"
+    fi
     pause
 }
 
 function list_backups() {
     echo -e "${CYAN}=== DAFTAR FILE BACKUP ===${NC}"
-    ls -lh "$INSTALL_DIR/backups" | awk '{print $9, $5}'
+    ls -lh "$INSTALL_DIR/backups" 2>/dev/null | awk '{print $9, $5}'
     pause
 }
 
@@ -384,7 +399,7 @@ while true; do
     IS_ACTIVE=$(systemctl is-active auto-backup.timer)
     if [[ "$IS_ACTIVE" == "active" ]]; then STATUS="${GREEN}ACTIVE${NC}"; else STATUS="${RED}INACTIVE${NC}"; fi
     
-    NEXT_RUN=$(systemctl list-timers --no-pager | grep auto-backup.timer | awk '{print $2, $3}')
+    NEXT_RUN=$(systemctl list-timers --no-pager | grep auto-backup.timer | awk '{print $2, $3 " " $4}')
     LAST_FILE=$(ls -t "$INSTALL_DIR/backups" 2>/dev/null | head -n1)
     TOTAL_FILE=$(ls "$INSTALL_DIR/backups" 2>/dev/null | wc -l)
     
@@ -394,7 +409,7 @@ while true; do
     echo -e "${CYAN}==========================================================${NC}"
     echo ""
     echo -e " Status Service   : $STATUS"
-    echo -e " Next Schedule    : ${PURPLE}$NEXT_RUN${NC}"
+    echo -e " Next Schedule    : ${PURPLE}${NEXT_RUN:-Unknown}${NC}"
     echo -e " Last Backup File : ${YELLOW}${LAST_FILE:-Belum ada backup}${NC}"
     echo -e " Total Backup     : $TOTAL_FILE File(s)"
     echo ""
@@ -446,5 +461,4 @@ if [[ "$SKIP_INPUT" == "false" ]]; then
     echo -e "${GREEN}Backup pertama dikirim ke Telegram.${NC}"
 fi
 
-# Hapus installer diri sendiri (opsional, amannya di comment saja kalau mau disimpan)
 # rm -- "$0"
