@@ -25,6 +25,7 @@ confirm() {
     esac
 }
 
+<<<<<<< HEAD
 ensure_root() {
     if [[ "$(id -u)" -ne 0 ]]; then
         echo "Jalankan script ini sebagai root!"
@@ -82,6 +83,12 @@ installer() {
 
     # create config
     cat > "$CONFIG_FILE" <<EOF
+=======
+# ======================================================
+# 2. CREATE CONFIG FILE
+# ======================================================
+cat <<EOF > "$CONFIG_FILE"
+>>>>>>> parent of 3bc2498 (update)
 BOT_TOKEN="$BOT_TOKEN"
 CHAT_ID="$CHAT_ID"
 FOLDERS_RAW="$FOLDERS_RAW"
@@ -103,7 +110,10 @@ EOF
 #!/bin/bash
 CONFIG_FILE="/opt/auto-backup/config.conf"
 source "$CONFIG_FILE"
+<<<<<<< HEAD
 export TZ="$TZ"
+=======
+>>>>>>> parent of 3bc2498 (update)
 
 BACKUP_DIR="$INSTALL_DIR/backups"
 mkdir -p "$BACKUP_DIR"
@@ -128,6 +138,7 @@ if [[ "$USE_MYSQL" == "y" && ! -z "$MYSQL_MULTI_CONF" ]]; then
     mkdir -p "$TMP_DIR/mysql"
     IFS=';' read -r -a MYSQL_ITEMS <<< "$MYSQL_MULTI_CONF"
     for ITEM in "${MYSQL_ITEMS[@]}"; do
+        # Format: user:pass@host:db1,db2
         USERPASS=$(echo "$ITEM" | cut -d'@' -f1)
         HOSTDB=$(echo "$ITEM" | cut -d'@' -f2)
         MYSQL_USER=$(echo "$USERPASS" | cut -d':' -f1)
@@ -135,14 +146,29 @@ if [[ "$USE_MYSQL" == "y" && ! -z "$MYSQL_MULTI_CONF" ]]; then
         MYSQL_HOST=$(echo "$HOSTDB" | cut -d':' -f1)
         MYSQL_DB_LIST=$(echo "$HOSTDB" | cut -d':' -f2)
         MYSQL_ARGS="-h$MYSQL_HOST -u$MYSQL_USER -p$MYSQL_PASS"
+<<<<<<< HEAD
         if [[ "$MYSQL_DB_LIST" == "all" ]]; then
             OUTFILE="$TMP_DIR/mysql/${MYSQL_USER}@${MYSQL_HOST}_ALL.sql"
             mysqldump $MYSQL_ARGS --all-databases > "$OUTFILE" 2>/dev/null || true
+=======
+
+        # backup semua DB
+        if [[ "$MYSQL_DB_LIST" == "all" ]]; then
+            OUTFILE="$TMP_DIR/mysql/${MYSQL_USER}@${MYSQL_HOST}_ALL.sql"
+            echo "[MySQL] Backup ALL DB -> $OUTFILE"
+            mysqldump $MYSQL_ARGS --all-databases > "$OUTFILE" 2>/dev/null
+>>>>>>> parent of 3bc2498 (update)
         else
+            # backup masing-masing DB
             IFS=',' read -r -a DBARR <<< "$MYSQL_DB_LIST"
             for DB in "${DBARR[@]}"; do
                 OUTFILE="$TMP_DIR/mysql/${MYSQL_USER}@${MYSQL_HOST}_${DB}.sql"
+<<<<<<< HEAD
                 mysqldump $MYSQL_ARGS "$DB" > "$OUTFILE" 2>/dev/null || true
+=======
+                echo "[MySQL] Backup DB $DB -> $OUTFILE"
+                mysqldump $MYSQL_ARGS "$DB" > "$OUTFILE" 2>/dev/null
+>>>>>>> parent of 3bc2498 (update)
             done
         fi
     done
@@ -172,8 +198,14 @@ rm -rf "$TMP_DIR"
 find "$BACKUP_DIR" -type f -mtime +"$RETENTION_DAYS" -delete 2>/dev/null || true
 EOF
 
+<<<<<<< HEAD
     chmod +x "$RUNNER"
     echo "[OK] Backup runner created: $RUNNER"
+=======
+chmod +x "$INSTALL_DIR/backup-runner.sh"
+
+echo "[OK] Backup runner created."
+>>>>>>> parent of 3bc2498 (update)
 
     # systemd unit
     cat > "$SERVICE_FILE" <<EOF
@@ -183,9 +215,14 @@ After=network.target mysql.service mariadb.service postgresql.service
 
 [Service]
 Type=oneshot
+<<<<<<< HEAD
 Environment="TZ=$TZ"
 ExecStart=/usr/bin/env TZ=$TZ $RUNNER
+=======
+ExecStart=$INSTALL_DIR/backup-runner.sh
+>>>>>>> parent of 3bc2498 (update)
 User=root
+Environment=TZ=$TZ
 
 [Install]
 WantedBy=multi-user.target
