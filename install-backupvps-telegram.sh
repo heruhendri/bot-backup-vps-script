@@ -420,7 +420,13 @@ show_status() {
                 total_interval=$(( next_epoch - last_epoch ))
                 elapsed=$(( now_epoch - last_epoch ))
 
-                percent=$(( elapsed * 100 / total_interval ))
+                # safety: avoid div by zero
+                if (( total_interval <= 0 )); then
+                    percent=100
+                else
+                    percent=$(( elapsed * 100 / total_interval ))
+                fi
+
                 [[ $percent -gt 100 ]] && percent=100
                 [[ $percent -lt 0 ]] && percent=0
 
@@ -441,7 +447,7 @@ show_status() {
     if [[ ! -d "$BACKUP_DIR" ]]; then
         echo "Last backup    : (directory tidak ditemukan)"
     else
-        lastfile=$(ls -1t "$BACKUP_DIR" | head -n1)
+        lastfile=$(ls -1t "$BACKUP_DIR" | head -n1 2>/dev/null || true)
         if [[ -z "$lastfile" ]]; then
             echo "Last backup    : (belum ada)"
         else
@@ -460,8 +466,6 @@ show_status() {
     echo -e "\e[36m$WATERMARK_FOOTER\e[0m"
     pause
 }
-
-
 
 # ---------- Folder / MySQL / PG functions ----------
 add_folder() {
@@ -806,7 +810,7 @@ while true; do
         16) encrypt_last_backup; pause ;;
         17) reload_systemd; pause ;;
         18) save_config; pause ;;
-        19) 19) show_status ;;
+        19) show_status; pause ;;
         0) echo "Keluar tanpa menyimpan." ; break ;;
         *) echo "Pilihan tidak valid." ; sleep 1 ;;
     esac
