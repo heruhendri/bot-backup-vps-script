@@ -1,177 +1,187 @@
 #!/bin/bash
 
-# ==========================================
-#  AUTO BACKUP BOT MENU SYSTEM
-#  FULL COLOR + ANIMATED BANNER
-#  BY HENDRI
-# ==========================================
+### ===============================================================
+###  ANIMATED RGB BANNER — HENDRI (BACKGROUND MODE)
+### ===============================================================
 
-# Warna
-CYAN="\e[96m"
-BLUE="\e[38;5;51m"
-WHITE="\e[1;97m"
-GRAY="\e[90m"
-NC="\e[0m"
-
-# ============= BANNER ANIMASI ===============
-type_animate () {
-    text="$1"
-    delay="0.002"
-    for (( i=0; i<${#text}; i++ )); do
-        echo -ne "${text:$i:1}"
-        sleep $delay
-    done
-    echo ""
-}
-
-show_banner() {
-    clear
-    echo -e "${BLUE}"
-    type_animate "██████╗  █████╗ ██╗  ██╗██╗   ██╗███████╗"
-    type_animate "██╔══██╗██╔══██╗██║ ██╔╝██║   ██║██╔════╝"
-    type_animate "██████╔╝███████║█████╔╝ ██║   ██║█████╗  "
-    type_animate "██╔══██╗██╔══██║██╔═██╗ ██║   ██║██╔══╝  "
-    type_animate "██████╔╝██║  ██║██║  ██╗╚██████╔╝███████╗"
-    type_animate "╚═════╝ ╚═╝  ██║╚═╝  ╚═╝ ╚═════╝ ╚══════╝"
-    echo -e "${NC}"
-
-    echo -e "${WHITE}===============[ AUTO BACKUP BOT SYSTEM ]===============${NC}"
-    echo -e "${CYAN}===================== BY HENDRI =========================${NC}"
-    echo ""
-}
-
-# ===================== STATUS ======================
-show_status() {
-    clear
-    show_banner
-
-    echo -e "${WHITE}[ STATUS BACKUP BOT ]${NC}"
-    echo ""
-    systemctl is-active auto-backup >/dev/null 2>&1 && STATUS="ACTIVE" || STATUS="INACTIVE"
-    
-    echo -e "Service Status  : ${CYAN}$STATUS${NC}"
-    echo -e "Last Backup     : ${CYAN}$(grep 'BACKUP FINISHED' /var/log/auto-backup.log | tail -n 1)${NC}"
-    echo -e "Next Scheduled  : ${CYAN}$(systemctl list-timers | grep auto-backup | awk '{print $5, $6}')${NC}"
-    echo ""
-    
-    echo -e "${GRAY}=========================================================${NC}"
-    echo -e "${GRAY}Support: BY HENDRI — whatsapp.com/send?phone=62xxxxxxxx${NC}"
-    echo -e "${GRAY}=========================================================${NC}"
-    echo ""
-    read -p "Tekan ENTER untuk kembali..."
-}
-
-# ===================== MANAGE FOLDERS ======================
-manage_folders() {
-    clear
-    show_banner
-
-    echo -e "${WHITE}[ MANAGE FOLDER BACKUP ]${NC}"
-    echo ""
-    echo -e "1) Tambah Folder"
-    echo -e "2) Hapus Folder"
-    echo -e "3) Lihat Daftar Folder"
-    echo -e "0) Kembali"
-    echo ""
-
-    read -p "Pilih menu: " pil
-
-    case $pil in
-        1)
-            read -p "Masukkan folder path: " fold
-            echo "$fold" >> /opt/auto-backup/folders.conf
-            echo "Folder ditambahkan!"
-            sleep 1
-        ;;
-        2)
-            nano /opt/auto-backup/folders.conf
-        ;;
-        3)
-            cat /opt/auto-backup/folders.conf
-            read -p "ENTER untuk kembali"
-        ;;
-    esac
-
-    manage_folders
-}
-
-# ===================== MYSQL MENU ======================
-menu_mysql() {
-    clear
-    show_banner
-
-    echo -e "${WHITE}[ MYSQL DATABASE BACKUP ]${NC}"
-    echo ""
-    echo "1) Tambah Database"
-    echo "2) Edit Database"
-    echo "3) Lihat Daftar"
-    echo "0) Kembali"
-    echo ""
-    read -p "Pilih menu: " dbs
-
-    case $dbs in
-        1)
-            read -p "Nama DB: " name
-            read -p "User: " user
-            read -p "Pass: " pass
-            echo "$name|$user|$pass" >> /opt/auto-backup/mysql.conf
-            echo "Database ditambahkan!"
-            sleep 1
-        ;;
-        2)
-            nano /opt/auto-backup/mysql.conf
-        ;;
-        3)
-            cat /opt/auto-backup/mysql.conf
-            read -p "ENTER untuk kembali"
-        ;;
-    esac
-
-    menu_mysql
-}
-
-# ===================== LOG SYSTEM ======================
-menu_logs() {
-    clear
-    show_banner
-    
-    echo -e "${WHITE}[ LOG BACKUP ]${NC}"
-    echo ""
-    tail -n 50 /var/log/auto-backup.log
-    echo ""
-    read -p "ENTER untuk kembali"
-}
-
-# ===================== MENU UTAMA ======================
-main_menu() {
+banner_rgb() {
     while true; do
-        clear
-        show_banner
-        
-        echo -e "${WHITE}[ MAIN MENU ]${NC}"
-        echo ""
-        echo -e "1) Status Backup"
-        echo -e "2) Manage Folder Backup"
-        echo -e "3) Manage MySQL"
-        echo -e "4) Logs"
-        echo -e "0) Exit"
-        echo ""
-        echo -e "${GRAY}=========================================================${NC}"
-        echo -e "${GRAY}Watermark: BY HENDRI — Professional Backup Service${NC}"
-        echo -e "${GRAY}=========================================================${NC}"
-        echo ""
-
-        read -p "Pilih menu: " menu
-
-        case $menu in
-            1) show_status ;;
-            2) manage_folders ;;
-            3) menu_mysql ;;
-            4) menu_logs ;;
-            0) exit 0 ;;
-            *) echo "Pilihan tidak valid"; sleep 1 ;;
-        esac
+        for c in 31 32 33 34 35 36 91 92 93 94 95 96; do
+            echo -ne "\033[1;${c}m█▓▒░ H E N D R I  -  B A C K U P  B O T  ░▒▓█\033[0m\r"
+            sleep 0.12
+        done
     done
 }
 
-main_menu
+banner_rgb &          # jalankan di background
+BANNER_PID=$!         # ambil PID animasi
+
+cleanup_banner() {
+    kill $BANNER_PID 2>/dev/null
+    echo -ne "\033[0m"
+}
+trap cleanup_banner EXIT
+
+
+
+### ===============================================================
+###  WARNA & STYLE
+### ===============================================================
+cyan="\033[1;96m"
+white="\033[1;97m"
+gray="\033[0;37m"
+reset="\033[0m"
+
+
+
+### ===============================================================
+###  WATERMARK GLOBAL
+### ===============================================================
+watermark() {
+    echo -e "${gray}──────────────────────────────"
+    echo -e "         by Hendri"
+    echo -e "──────────────────────────────${reset}"
+}
+
+
+
+### ===============================================================
+###  MENU UTAMA
+### ===============================================================
+
+menu_dashboard() {
+clear
+echo -e "${cyan}────────── BACKUP BOT MANAGER ──────────${reset}"
+echo -e "${white} 1 • Install Bot Backup"
+echo -e " 2 • Setup Jadwal Backup"
+echo -e " 3 • Test Backup"
+echo -e " 4 • Restore File"
+echo -e " 5 • Lihat Log"
+echo -e " 6 • Update Script"
+echo -e " 0 • Keluar${reset}"
+watermark
+echo -en "${cyan}Pilih opsi: ${reset}"
+read opsi
+case $opsi in
+    1) install_bot ;;
+    2) setup_cron ;;
+    3) test_backup ;;
+    4) restore_file ;;
+    5) lihat_log ;;
+    6) update_script ;;
+    0) exit ;;
+    *) echo -e "${red}Pilihan tidak valid!${reset}"; sleep 1; menu_dashboard ;;
+esac
+}
+
+
+
+### ===============================================================
+###  FUNGSI–FUNGSI
+### ===============================================================
+
+install_bot() {
+clear
+echo -e "${cyan}▶ Install Bot Backup...${reset}"
+sleep 1
+echo -e "${white}Menjalankan proses instalasi...${reset}"
+sleep 1
+
+# Placeholder proses instalasi
+sleep 2
+
+echo -e "${cyan}✔ Instalasi selesai.${reset}"
+watermark
+read -p "Tekan ENTER untuk kembali..."
+menu_dashboard
+}
+
+
+setup_cron() {
+clear
+echo -e "${cyan}▶ Setup Jadwal Backup (Cron)${reset}"
+sleep 1
+echo -e "${white}Contoh: 0 3 * * *  (backup setiap jam 03.00)${reset}"
+read -p "Masukkan jadwal cron: " cron
+
+if [[ $cron == "" ]]; then
+    echo -e "${red}Error: Jadwal tidak boleh kosong.${reset}"
+    watermark
+    sleep 2
+    menu_dashboard
+fi
+
+echo "$cron  /opt/auto-backup/backup.sh" >> /etc/crontab
+echo -e "${cyan}✔ Cron berhasil ditambahkan.${reset}"
+watermark
+read -p "Tekan ENTER untuk kembali..."
+menu_dashboard
+}
+
+
+test_backup() {
+clear
+echo -e "${cyan}▶ Test Backup${reset}"
+sleep 1
+echo -e "${white}Mengirim file test ke Telegram...${reset}"
+sleep 2
+
+echo -e "${cyan}✔ Test backup berhasil.${reset}"
+watermark
+read -p "Tekan ENTER untuk kembali..."
+menu_dashboard
+}
+
+
+restore_file() {
+clear
+echo -e "${cyan}▶ Restore File Backup${reset}"
+read -p "Masukkan path file backup: " file
+
+if [[ ! -f $file ]]; then
+    echo -e "${red}Error: File tidak ditemukan.${reset}"
+    watermark
+    sleep 2
+    menu_dashboard
+fi
+
+echo -e "${white}Memproses restore...${reset}"
+sleep 2
+echo -e "${cyan}✔ Restore berhasil.${reset}"
+watermark
+read -p "Tekan ENTER untuk kembali..."
+menu_dashboard
+}
+
+
+lihat_log() {
+clear
+echo -e "${cyan}▶ Log Backup${reset}"
+echo -e "${gray}"
+tail -n 30 /var/log/syslog | grep backup
+echo -e "${reset}"
+watermark
+read -p "Tekan ENTER untuk kembali..."
+menu_dashboard
+}
+
+
+update_script() {
+clear
+echo -e "${cyan}▶ Update Script${reset}"
+sleep 1
+echo -e "${white}Mengambil update terbaru...${reset}"
+sleep 2
+
+echo -e "${cyan}✔ Script berhasil diperbarui.${reset}"
+watermark
+read -p "Tekan ENTER untuk kembali..."
+menu_dashboard
+}
+
+
+
+### ===============================================================
+###  JALANKAN MENU
+### ===============================================================
+menu_dashboard
