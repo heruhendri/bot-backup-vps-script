@@ -328,44 +328,76 @@ confirm() {
 show_status() {
     echo "$WATERMARK_HEADER"
     echo ""
-    # service status
+
+    # ---------- SERVICE STATUS ----------
     svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo "unknown")
     svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null || echo "unknown")
     echo "Service status : $svc_active (enabled: $svc_enabled)"
 
-    # timer status
+    # ---------- TIMER STATUS ----------
     tmr_active=$(systemctl is-active auto-backup.timer 2>/dev/null || echo "unknown")
     tmr_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null || echo "unknown")
     echo "Timer status   : $tmr_active (enabled: $tmr_enabled)"
 
-    # next scheduled run using systemctl show
-    next_run=$(systemctl show -p NextElapse --value auto-backup.timer 2>/dev/null || echo "unknown")
-    if [[ -z "$next_run" ]]; then next_run="(tidak tersedia)"; fi
-    echo "Next run       : $next_run"
+    # ---------- NEXT SCHEDULED RUN ----------
+    next_usec=$(systemctl show auto-backup.timer -p NextRunUSec --value 2>/dev/null || echo "0")
 
-    # last backup (latest file in backups)
+    if [[ "$next_usec" == "0" || "$next_usec" == "" ]]; then
+        next_run="(tidak tersedia)"
+        time_left="(tidak tersedia)"
+    else
+        # convert microseconds -> epoch
+        next_epoch=$(( next_usec / 1000000 ))
+        next_run=$(date -d @"$next_epoch" "+%Y-%m-%d %H:%M:%S")
+
+        # ---------- TIME LEFT ----------
+        now_epoch=$(date +%s)
+        diff=$(( next_epoch - now_epoch ))
+
+        if (( diff <= 0 )); then
+            time_left="0 detik (jadwal berjalan atau sudah lewat)"
+        else
+            days=$(( diff / 86400 ))
+            hours=$(( (diff % 86400) / 3600 ))
+            minutes=$(( (diff % 3600) / 60 ))
+            seconds=$(( diff % 60 ))
+
+            # format rapi
+            time_left=""
+            [[ $days -gt 0 ]] && time_left="${time_left}${days} hari "
+            [[ $hours -gt 0 ]] && time_left="${time_left}${hours} jam "
+            [[ $minutes -gt 0 ]] && time_left="${time_left}${minutes} menit "
+            time_left="${time_left}${seconds} detik"
+        fi
+    fi
+
+    echo "Next run       : $next_run"
+    echo "Time left      : $time_left"
+
+    # ---------- LAST BACKUP ----------
     BACKUP_DIR="$INSTALL_DIR/backups"
-    if [[ -d "$BACKUP_DIR" ]]; then
-        lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1 || true)
-        if [[ -n "$lastfile" ]]; then
+    if [[ ! -d "$BACKUP_DIR" ]]; then
+        echo "Last backup    : (direktori tidak ditemukan)"
+    else
+        lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1)
+        if [[ -z "$lastfile" ]]; then
+            echo "Last backup    : (belum ada backup)"
+        else
             lastpath="$BACKUP_DIR/$lastfile"
             if [[ -f "$lastpath" ]]; then
-                lasttime=$(stat -c '%y' "$lastpath" 2>/dev/null || echo "(waktu tidak tersedia)")
-                echo "Last backup    : $lastfile ( $lasttime )"
+                lasttime=$(stat -c '%y' "$lastpath" 2>/dev/null | cut -d'.' -f1)
+                echo "Last backup    : $lastfile ($lasttime)"
             else
-                echo "Last backup    : (tidak ada file backup)"
+                echo "Last backup    : (file tidak ditemukan)"
             fi
-        else
-            echo "Last backup    : (tidak ada file backup)"
         fi
-    else
-        echo "Last backup    : (direktori backup tidak ada)"
     fi
 
     echo ""
     echo "$WATERMARK_FOOTER"
     pause
 }
+
 
 # ---------- Folder / MySQL / PG functions ----------
 add_folder() {
