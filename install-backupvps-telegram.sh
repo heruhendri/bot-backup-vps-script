@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ======================================================
-#  AUTO BACKUP VPS — TELEGRAM BOT INSTALLER (FIXED)
+#  AUTO BACKUP VPS — TELEGRAM BOT INSTALLER (CLEANED)
 # ======================================================
 
 # Warna
@@ -157,7 +157,8 @@ mkdir -p "$TMP_DIR"
 IFS=',' read -r -a FOLDERS <<< "$FOLDERS_RAW"
 for f in "${FOLDERS[@]}"; do
     if [ -d "$f" ]; then
-        cp -r "$f" "$TMP_DIR/"
+        # Menggunakan 'rsync -a' untuk lebih efisien dan menghindari masalah symbolic link/permissions
+        rsync -a "$f" "$TMP_DIR/" 2>/dev/null
     fi
 done
 
@@ -191,7 +192,13 @@ fi
 # 3. BACKUP POSTGRES
 if [[ "$USE_PG" == "y" ]]; then
     mkdir -p "$TMP_DIR/postgres"
-    su - postgres -c "pg_dumpall > $TMP_DIR/postgres/all.sql" 2>/dev/null
+    # Memastikan perintah dijalankan sebagai user postgres
+    if command -v su &> /dev/null; then
+        su - postgres -c "pg_dumpall > $TMP_DIR/postgres/all.sql" 2>/dev/null
+    else
+        # Fallback jika 'su' tidak tersedia atau user postgres tidak ada
+        pg_dumpall > "$TMP_DIR/postgres/all.sql" 2>/dev/null
+    fi
 fi
 
 # 4. COMPRESS
@@ -202,7 +209,7 @@ CAPTION="✅ <b>Backup VPS Selesai</b>%0A"
 CAPTION+="📅 Date: $(date)%0A"
 CAPTION+="📂 File: $(basename $FILE)%0A"
 CAPTION+="💾 Size: $(du -h $FILE | cut -f1)%0A"
-CAPTION+="%23AutoBackup By Hendri"
+CAPTION+="#AutoBackup By Hendri"
 
 curl -s -F document=@"$FILE" \
      -F caption="$CAPTION" -F parse_mode="HTML" \
@@ -255,7 +262,7 @@ systemctl enable auto-backup.service
 systemctl enable --now auto-backup.timer
 
 # ======================================================
-# 5. INSTALL MENU SCRIPT (DASHBOARD UI)
+# 5. INSTALL MENU SCRIPT (DASHBOARD UI) - FIX DITEMPAT
 # ======================================================
 cat <<'EOF' > "$MENU_BIN"
 #!/bin/bash
@@ -276,8 +283,7 @@ PURPLE='\033[0;35m'
 NC='\033[0m'
 
 if [[ ! -f "$CONFIG" ]]; then
-    echo -e "${RED}Config file not found in $CONFIG${NC}"
-    echo "Silahkan jalankan installer ulang."
+    echo -e "${RED}Menu belum terpasang. Jalankan installer lagi.${NC}"
     exit 1
 fi
 
