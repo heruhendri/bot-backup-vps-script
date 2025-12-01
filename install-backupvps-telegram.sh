@@ -10,7 +10,7 @@ echo "========================================="
 # ======================================================
 read -p "Masukkan TOKEN Bot Telegram: " BOT_TOKEN
 read -p "Masukkan CHAT_ID Telegram: " CHAT_ID
-read -p "Masukkan folder yang mau di-backup (comma separated, contoh: /etc,/var/www): " FOLDERS_RAW"
+read -p "Masukkan folder yang mau di-backup (comma separated, contoh: /etc,/var/www): " FOLDERS_RAW
 
 # ======================================================
 #  MYSQL MULTI CONFIG INPUT
@@ -93,9 +93,6 @@ cat <<'EOF' > "$INSTALL_DIR/backup-runner.sh"
 CONFIG_FILE="/opt/auto-backup/config.conf"
 source "$CONFIG_FILE"
 
-# FIX: timezone harus di-export supaya 'date' mengikuti TZ
-export TZ="$TZ"
-
 BACKUP_DIR="$INSTALL_DIR/backups"
 mkdir -p "$BACKUP_DIR"
 
@@ -124,6 +121,7 @@ if [[ "$USE_MYSQL" == "y" ]]; then
     IFS=';' read -r -a MYSQL_ITEMS <<< "$MYSQL_MULTI_CONF"
 
     for ITEM in "${MYSQL_ITEMS[@]}"; do
+        # Format: user:pass@host:db1,db2
         USERPASS=$(echo "$ITEM" | cut -d'@' -f1)
         HOSTDB=$(echo "$ITEM" | cut -d'@' -f2)
 
@@ -135,13 +133,17 @@ if [[ "$USE_MYSQL" == "y" ]]; then
 
         MYSQL_ARGS="-h$MYSQL_HOST -u$MYSQL_USER -p$MYSQL_PASS"
 
+        # backup semua DB
         if [[ "$MYSQL_DB_LIST" == "all" ]]; then
             OUTFILE="$TMP_DIR/mysql/${MYSQL_USER}@${MYSQL_HOST}_ALL.sql"
+            echo "[MySQL] Backup ALL DB -> $OUTFILE"
             mysqldump $MYSQL_ARGS --all-databases > "$OUTFILE" 2>/dev/null
         else
+            # backup masing-masing DB
             IFS=',' read -r -a DBARR <<< "$MYSQL_DB_LIST"
             for DB in "${DBARR[@]}"; do
                 OUTFILE="$TMP_DIR/mysql/${MYSQL_USER}@${MYSQL_HOST}_${DB}.sql"
+                echo "[MySQL] Backup DB $DB -> $OUTFILE"
                 mysqldump $MYSQL_ARGS "$DB" > "$OUTFILE" 2>/dev/null
             done
         fi
