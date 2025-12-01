@@ -1,4 +1,6 @@
 name: CI - Bash Script Checks
+permissions:
+  contents: read
 
 on:
   push:
