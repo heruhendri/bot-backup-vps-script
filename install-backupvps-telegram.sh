@@ -1,80 +1,163 @@
 #!/bin/bash
 clear
 
-echo "========================================="
-echo "     AUTO BACKUP VPS — TELEGRAM BOT      "
-echo "========================================="
+# ==================================================
+#  AUTO INSTALLER BACKUP VPS — TELEGRAM (DIALOG UI)
+# ==================================================
 
-# ======================================================
-# 1. INPUT
-# ======================================================
-read -p "Masukkan TOKEN Bot Telegram: " BOT_TOKEN
-read -p "Masukkan CHAT_ID Telegram: " CHAT_ID
-read -p "Masukkan folder yang mau di-backup (comma separated, contoh: /etc,/var/www): " FOLDERS_RAW
-
-# ======================================================
-#  MYSQL MULTI CONFIG INPUT
-# ======================================================
-read -p "Backup MySQL? (y/n): " USE_MYSQL
-MYSQL_MULTI_CONF=""
-if [[ "$USE_MYSQL" == "y" ]]; then
-    echo ""
-    read -p "Berapa konfigurasi MySQL yang ingin Anda tambahkan? " MYSQL_COUNT
-    
-    for ((i=1; i<=MYSQL_COUNT; i++)); do
-        echo ""
-        echo "📌 Konfigurasi MySQL ke-$i"
-        
-        read -p "MySQL Host (default: localhost): " MYSQL_HOST
-        MYSQL_HOST=${MYSQL_HOST:-localhost}
-
-        read -p "MySQL Username: " MYSQL_USER
-        read -s -p "MySQL Password: " MYSQL_PASS
-        echo ""
-
-        echo "Mode backup database:"
-        echo "1) Backup SEMUA database"
-        echo "2) Pilih database tertentu"
-        read -p "Pilih (1/2): " MODE
-
-        if [[ "$MODE" == "1" ]]; then
-            DBLIST="all"
-        else
-            read -p "Masukkan daftar DB (comma separated, ex: db1,db2): " DBLIST
-        fi
-
-        ENTRY="${MYSQL_USER}:${MYSQL_PASS}@${MYSQL_HOST}:${DBLIST}"
-
-        if [[ -z "$MYSQL_MULTI_CONF" ]]; then
-            MYSQL_MULTI_CONF="$ENTRY"
-        else
-            MYSQL_MULTI_CONF="${MYSQL_MULTI_CONF};${ENTRY}"
-        fi
-    done
+# --------------------------------------------
+#  CEK & INSTALL dialog
+# --------------------------------------------
+if ! command -v dialog &> /dev/null; then
+    echo "dialog belum terpasang. Menginstall..."
+    apt update -y
+    apt install dialog -y || {
+        echo "Gagal menginstall dialog."
+        exit 1
+    }
 fi
-
-# ======================================================
-#  POSTGRES INPUT
-# ======================================================
-read -p "Backup PostgreSQL? (y/n): " USE_PG
-read -p "Retention (berapa hari file backup disimpan): " RETENTION_DAYS
-read -p "Timezone (contoh: Asia/Jakarta): " TZ
-read -p "Jadwal cron (format systemd timer, contoh: *-*-* 03:00:00): " CRON_TIME
 
 INSTALL_DIR="/opt/auto-backup"
 CONFIG_FILE="$INSTALL_DIR/config.conf"
+BACKUP_RUNNER="$INSTALL_DIR/backup-runner.sh"
 
 mkdir -p "$INSTALL_DIR"
 
-# ======================================================
-# SETTING TIMEZONE SYSTEM
-# ======================================================
-echo "[OK] Setting timezone sistem..."
-timedatectl set-timezone "$TZ"
+# --------------------------------------------
+#  MENU INSTALLER
+# --------------------------------------------
+menu_installer() {
+    dialog --clear --title "Installer Backup VPS Telegram" \
+        --menu "Pilih menu instalasi:" 18 60 10 \
+        1 "Masukkan Token Bot Telegram" \
+        2 "Masukkan Chat ID Telegram" \
+        3 "Masukkan Folder yang ingin di-backup" \
+        4 "Konfigurasi MySQL Multi Instance" \
+        5 "Aktifkan PostgreSQL Backup" \
+        6 "Retention (hari)" \
+        7 "Timezone Server" \
+        8 "Jadwal Backup (systemd timer)" \
+        9 "Selesai & Install" \
+        0 "Keluar" 2> /tmp/menu_choice
 
-# ======================================================
-# 2. CREATE CONFIG FILE
-# ======================================================
+    case $(cat /tmp/menu_choice) in
+        1) set_token ;;
+        2) set_chatid ;;
+        3) set_folders ;;
+        4) set_mysql_menu ;;
+        5) set_pg ;;
+        6) set_retention ;;
+        7) set_timezone ;;
+        8) set_cron ;;
+        9) finalize_install ;;
+        0) clear; exit 0 ;;
+    esac
+
+    menu_installer
+}
+
+# --------------------------------------------
+#  INPUT FUNCTIONS
+# --------------------------------------------
+set_token() {
+    BOT_TOKEN=$(dialog --inputbox "Masukkan BOT TOKEN Telegram:" 10 60 "$BOT_TOKEN" 2>&1 >/dev/tty)
+}
+set_chatid() {
+    CHAT_ID=$(dialog --inputbox "Masukkan CHAT ID Telegram:" 10 60 "$CHAT_ID" 2>&1 >/dev/tty)
+}
+set_folders() {
+    FOLDERS_RAW=$(dialog --inputbox "Masukkan folder (comma separated):" 10 60 "$FOLDERS_RAW" 2>&1 >/dev/tty)
+}
+set_pg() {
+    USE_PG=$(dialog --menu "Backup PostgreSQL?" 12 40 2 \
+        y "Ya" \
+        n "Tidak" 2>&1 >/dev/tty)
+}
+set_retention() {
+    RETENTION_DAYS=$(dialog --inputbox "Berapa hari file backup disimpan?" 10 60 "$RETENTION_DAYS" 2>&1 >/dev/tty)
+}
+set_timezone() {
+    TZ=$(dialog --inputbox "Timezone (contoh: Asia/Jakarta):" 10 60 "$TZ" 2>&1 >/dev/tty)
+}
+set_cron() {
+    CRON_TIME=$(dialog --inputbox "Jadwal cron systemd (contoh: *-*-* 03:00:00):" 10 60 "$CRON_TIME" 2>&1 >/dev/tty)
+}
+
+# --------------------------------------------
+# MYSQL MENU
+# --------------------------------------------
+set_mysql_menu() {
+    dialog --menu "Backup MySQL?" 12 40 2 \
+        y "Ya" n "Tidak" 2> /tmp/mysql_choice
+    USE_MYSQL=$(cat /tmp/mysql_choice)
+
+    [[ $USE_MYSQL == "n" ]] && MYSQL_MULTI_CONF="" && return
+
+    while true; do
+        dialog --menu "Menu MySQL" 15 60 6 \
+            1 "Tambah konfigurasi MySQL" \
+            2 "Lihat konfigurasi" \
+            3 "Hapus konfigurasi" \
+            0 "Kembali" 2> /tmp/mysql_menu
+
+        case $(cat /tmp/mysql_menu) in
+            1) add_mysql_config ;;
+            2) show_mysql ;;
+            3) remove_mysql ;;
+            0) break ;;
+        esac
+    done
+}
+
+add_mysql_config() {
+    MYSQL_HOST=$(dialog --inputbox "MySQL Host:" 10 60 "localhost" 2>&1 >/dev/tty)
+    MYSQL_USER=$(dialog --inputbox "MySQL Username:" 10 60 2>&1 >/dev/tty)
+    MYSQL_PASS=$(dialog --passwordbox "MySQL Password:" 10 60 2>&1 >/dev/tty)
+
+    MODE=$(dialog --menu "Mode database:" 12 40 2 \
+        all "Semua database" \
+        pilih "Pilih database" 2>&1 >/dev/tty)
+
+    if [[ $MODE == "pilih" ]]; then
+        DBLIST=$(dialog --inputbox "Masukkan nama DB (comma separated):" 10 60 2>&1 >/dev/tty)
+    else
+        DBLIST="all"
+    fi
+
+    ENTRY="${MYSQL_USER}:${MYSQL_PASS}@${MYSQL_HOST}:${DBLIST}"
+
+    if [[ -z "$MYSQL_MULTI_CONF" ]]; then
+        MYSQL_MULTI_CONF="$ENTRY"
+    else
+        MYSQL_MULTI_CONF="$MYSQL_MULTI_CONF;$ENTRY"
+    fi
+}
+
+show_mysql() {
+    dialog --msgbox "Konfigurasi MySQL:\n$MYSQL_MULTI_CONF" 15 60
+}
+
+remove_mysql() {
+    IFS=';' read -ra ARR <<< "$MYSQL_MULTI_CONF"
+    LIST=()
+    num=1
+    for item in "${ARR[@]}"; do
+        LIST+=($num "$item")
+        ((num++))
+    done
+
+    CHOICE=$(dialog --menu "Hapus konfigurasi:" 20 70 10 "${LIST[@]}" 2>&1 >/dev/tty)
+    [[ -z $CHOICE ]] && return
+
+    unset 'ARR[CHOICE-1]'
+    MYSQL_MULTI_CONF=$(IFS=';'; echo "${ARR[*]}")
+}
+
+# --------------------------------------------
+#  FINAL INSTALL
+# --------------------------------------------
+finalize_install() {
+
 cat <<EOF > "$CONFIG_FILE"
 BOT_TOKEN="$BOT_TOKEN"
 CHAT_ID="$CHAT_ID"
@@ -89,107 +172,62 @@ TZ="$TZ"
 INSTALL_DIR="$INSTALL_DIR"
 EOF
 
-echo "[OK] Config saved: $CONFIG_FILE"
-
-# ======================================================
-# 3. CREATE BACKUP RUNNER
-# ======================================================
-cat <<'EOF' > "$INSTALL_DIR/backup-runner.sh"
+# Backup runner
+cat <<'EOF' > "$BACKUP_RUNNER"
 #!/bin/bash
 CONFIG_FILE="/opt/auto-backup/config.conf"
 source "$CONFIG_FILE"
-
-export TZ="$TZ"
-
 BACKUP_DIR="$INSTALL_DIR/backups"
 mkdir -p "$BACKUP_DIR"
-
 DATE=$(date +%F-%H%M)
 FILE="$BACKUP_DIR/backup-$DATE.tar.gz"
 TMP_DIR="$INSTALL_DIR/tmp-$DATE"
-
 mkdir -p "$TMP_DIR"
 
-# ----------------------------
-#  BACKUP FOLDERS
-# ----------------------------
-IFS=',' read -r -a FOLDERS <<< "$FOLDERS_RAW"
-for f in "${FOLDERS[@]}"; do
-    if [ -d "$f" ]; then
-        cp -r "$f" "$TMP_DIR/"
-    fi
-done
+IFS=',' read -ra FL <<< "$FOLDERS_RAW"
+for f in "${FL[@]}"; do [[ -d "$f" ]] && cp -r "$f" "$TMP_DIR/"; done
 
-# ----------------------------
-#  BACKUP MYSQL MULTI CONFIG
-# ----------------------------
 if [[ "$USE_MYSQL" == "y" ]]; then
     mkdir -p "$TMP_DIR/mysql"
+    IFS=';' read -ra MYSQLS <<< "$MYSQL_MULTI_CONF"
+    for item in "${MYSQLS[@]}"; do
+        USERPASS=$(echo "$item" | cut -d'@' -f1)
+        HOSTDB=$(echo "$item" | cut -d'@' -f2)
+        USER=$(echo "$USERPASS" | cut -d':' -f1)
+        PASS=$(echo "$USERPASS" | cut -d':' -f2)
+        HOST=$(echo "$HOSTDB" | cut -d':' -f1)
+        DBS=$(echo "$HOSTDB" | cut -d':' -f2)
 
-    IFS=';' read -r -a MYSQL_ITEMS <<< "$MYSQL_MULTI_CONF"
+        ARG="-h$HOST -u$USER -p$PASS"
 
-    for ITEM in "${MYSQL_ITEMS[@]}"; do
-        USERPASS=$(echo "$ITEM" | cut -d'@' -f1)
-        HOSTDB=$(echo "$ITEM" | cut -d'@' -f2)
-
-        MYSQL_USER=$(echo "$USERPASS" | cut -d':' -f1)
-        MYSQL_PASS=$(echo "$USERPASS" | cut -d':' -f2)
-
-        MYSQL_HOST=$(echo "$HOSTDB" | cut -d':' -f1)
-        MYSQL_DB_LIST=$(echo "$HOSTDB" | cut -d':' -f2)
-
-        MYSQL_ARGS="-h$MYSQL_HOST -u$MYSQL_USER -p$MYSQL_PASS"
-
-        if [[ "$MYSQL_DB_LIST" == "all" ]]; then
-            OUTFILE="$TMP_DIR/mysql/${MYSQL_USER}@${MYSQL_HOST}_ALL.sql"
-            mysqldump $MYSQL_ARGS --all-databases > "$OUTFILE" 2>/dev/null
+        if [[ "$DBS" == "all" ]]; then
+            mysqldump $ARG --all-databases > "$TMP_DIR/mysql/${USER}@${HOST}_ALL.sql"
         else
-            IFS=',' read -r -a DBARR <<< "$MYSQL_DB_LIST"
-            for DB in "${DBARR[@]}"; do
-                OUTFILE="$TMP_DIR/mysql/${MYSQL_USER}@${MYSQL_HOST}_${DB}.sql"
-                mysqldump $MYSQL_ARGS "$DB" > "$OUTFILE" 2>/dev/null
+            IFS=',' read -ra DBARR <<< "$DBS"
+            for db in "${DBARR[@]}"; do
+                mysqldump $ARG "$db" > "$TMP_DIR/mysql/${USER}@${HOST}_${db}.sql"
             done
         fi
     done
 fi
 
-# ----------------------------
-#  BACKUP POSTGRESQL
-# ----------------------------
 if [[ "$USE_PG" == "y" ]]; then
     mkdir -p "$TMP_DIR/postgres"
     su - postgres -c "pg_dumpall > $TMP_DIR/postgres/all.sql"
 fi
 
-# ----------------------------
-#  CREATE TAR
-# ----------------------------
 tar -czf "$FILE" -C "$TMP_DIR" .
-
-# ----------------------------
-#  SEND TO TELEGRAM
-# ----------------------------
 curl -s -F document=@"$FILE" \
-     -F caption="Backup selesai: $(basename $FILE)" \
-     "https://api.telegram.org/bot$BOT_TOKEN/sendDocument?chat_id=$CHAT_ID"
+    -F caption="Backup selesai: $(basename $FILE)" \
+    "https://api.telegram.org/bot$BOT_TOKEN/sendDocument?chat_id=$CHAT_ID"
 
-# ----------------------------
-#  AUTO CLEAN TEMP
-# ----------------------------
 rm -rf "$TMP_DIR"
-
-# ----------------------------
-#  RETENTION CLEANER
-# ----------------------------
 find "$BACKUP_DIR" -type f -mtime +$RETENTION_DAYS -delete
 EOF
 
-chmod +x "$INSTALL_DIR/backup-runner.sh"
-echo "[OK] Backup runner created."
+chmod +x "$BACKUP_RUNNER"
 
-# ======================================================
-# 4. SYSTEMD SERVICE
-# ======================================================
+# Systemd files
 cat <<EOF > /etc/systemd/system/auto-backup.service
 [Unit]
 Description=Auto Backup VPS to Telegram
@@ -197,50 +235,76 @@ After=network.target mysql.service mariadb.service postgresql.service
 
 [Service]
 Type=oneshot
-Environment="TZ=$TZ"
-ExecStart=/usr/bin/env TZ=$TZ $INSTALL_DIR/backup-runner.sh
+ExecStart=$BACKUP_RUNNER
 User=root
+Environment=TZ=$TZ
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# ======================================================
-# 5. SYSTEMD TIMER
-# ======================================================
 cat <<EOF > /etc/systemd/system/auto-backup.timer
 [Unit]
 Description=Run Auto Backup VPS
-
 [Timer]
 OnCalendar=$CRON_TIME
 Persistent=true
-
 [Install]
 WantedBy=timers.target
 EOF
 
-# ======================================================
-# 6. ENABLE SERVICE + TIMER
-# ======================================================
 systemctl daemon-reload
 systemctl enable auto-backup.service
 systemctl enable --now auto-backup.timer
 
-echo ""
-echo "==========================================="
-echo "INSTALL COMPLETE!"
-echo "==========================================="
-echo "Service  : auto-backup.service"
-echo "Timer    : auto-backup.timer"
-echo "Config   : $CONFIG_FILE"
-echo "Backup   : $INSTALL_DIR/backups"
+# ============================
+#  BUAT MENU GLOBAL
+# ============================
+cat <<'EOF' > /usr/bin/menu-bot-backup
+#!/bin/bash
+bash /opt/auto-backup/menu.sh
+EOF
+chmod +x /usr/bin/menu-bot-backup
 
-echo ""
-echo "Testing backup pertama..."
-bash "$INSTALL_DIR/backup-runner.sh"
-echo "Backup pertama dikirim ke Telegram."
+# ============================
+#  GENERATE MENU.SH (PANEL)
+# ============================
+cat <<'EOF' > /opt/auto-backup/menu.sh
+#!/bin/bash
+CONFIG="/opt/auto-backup/config.conf"
+source "$CONFIG"
 
-echo ""
-echo "Menghapus file installer..."
-rm -- "$0"
+while true; do
+    dialog --clear --menu "AUTO BACKUP TELEGRAM — CONTROL PANEL" 20 60 10 \
+        1 "Lihat konfigurasi" \
+        2 "Ubah folder backup" \
+        3 "Kelola MySQL" \
+        4 "Ganti Timezone" \
+        5 "Ganti Retention" \
+        6 "Jalankan backup sekarang" \
+        0 "Keluar" 2> /tmp/pil
+
+    case $(cat /tmp/pil) in
+        1) dialog --msgbox "`cat $CONFIG`" 25 80 ;;
+        2) nano $CONFIG ;;
+        3) nano $CONFIG ;;
+        4) nano $CONFIG ;;
+        5) nano $CONFIG ;;
+        6) bash /opt/auto-backup/backup-runner.sh && dialog --msgbox "Backup selesai dikirim!" 10 40 ;;
+        0) clear; exit 0 ;;
+    esac
+done
+EOF
+
+chmod +x /opt/auto-backup/menu.sh
+
+dialog --msgbox "INSTALL COMPLETE!\n\nGunakan perintah:\n   menu-bot-backup" 12 50
+
+clear
+exit 0
+}
+
+# --------------------------------------------
+#  JALANKAN INSTALLER
+# --------------------------------------------
+menu_installer
