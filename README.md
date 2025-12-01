@@ -1,11 +1,11 @@
 
 
-# 📦 **Installer-Backup-Vps-Bot-Telegram**
+# 📦 **bot-backup-vps-script**
 
-![License](https://img.shields.io/github/LICENSE/heruhendri/Installer-Backup-Vps-Bot-Telegram)
-![Stars](https://img.shields.io/github/stars/heruhendri/Installer-Backup-Vps-Bot-Telegram?style=social)
-![Forks](https://img.shields.io/github/forks/heruhendri/Installer-Backup-Vps-Bot-Telegram?style=social)
-![Issues](https://img.shields.io/github/issues/heruhendri/Installer-Backup-Vps-Bot-Telegram)
+![License](https://img.shields.io/github/license/heruhendri/bot-backup-vps-script)
+![Stars](https://img.shields.io/github/stars/heruhendri/bot-backup-vps-script?style=social)
+![Forks](https://img.shields.io/github/forks/heruhendri/bot-backup-vps-script?style=social)
+![Issues](https://img.shields.io/github/issues/heruhendri/bot-backup-vps-script)
 ![Version](https://img.shields.io/badge/version-2.0.0-blue)
 
 ---
@@ -53,11 +53,42 @@ Backup otomatis **folder + database** ke **Telegram**, berjalan sebagai **system
 
 Cukup jalankan:
 
+```bash
+bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/master/install-backupvps-telegram.sh)
+```
+
+Installer akan menanyakan:
+
+* Token bot Telegram
+* Chat ID
+* Folder yang ingin dibackup
+* Backup MySQL? (optional)
+* Backup PostgreSQL? (optional)
+* Daftar database MySQL (all / comma separated)
+* Retention days
+* Timezone
+* Jadwal backup (systemd timer format)
+
+Setelah selesai:
+
+* Service dibuat → `auto-backup.service`
+* Timer dibuat → `auto-backup.timer`
+* Installer otomatis menghapus dirinya
 
 ---
 
+# 🛠 **UPDATE KONFIGURASI (Tambah / Edit / Hapus)**
+
+Update dilakukan melalui script:
+
+```
+update-backup.sh
+```
+
+Jalankan:
+
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/master/update-backup.sh)
+bash <(curl -s https://raw.githubusercontent.com/heruhendri/bot-backup-vps-script/master/update-backup.sh)
 ```
 
 Menu yang tersedia:
@@ -219,7 +250,7 @@ systemctl list-timers | grep auto-backup
 
 Pull request & issue sangat welcome!
 
-👉 [https://github.com/heruhendri/Installer-Backup-Vps-Bot-Telegram](https://github.com/heruhendri/Installer-Backup-Vps-Bot-Telegram)
+👉 [https://github.com/heruhendri/bot-backup-vps-script](https://github.com/heruhendri/bot-backup-vps-script)
 
 ---
 
