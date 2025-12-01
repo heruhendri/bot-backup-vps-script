@@ -1,5 +1,7 @@
 #!/bin/bash
 CONFIG="/opt/auto-backup/config.conf"
+INSTALL_DIR="/opt/auto-backup"
+RUNNER="$INSTALL_DIR/backup-runner.sh"
 
 if [[ ! -f "$CONFIG" ]]; then
     echo "Config tidak ditemukan. Jalankan installer terlebih dahulu."
@@ -13,21 +15,23 @@ source "$CONFIG"
 # ===============================
 show_menu() {
     clear
-    echo "==============================================="
-    echo "   CONFIG MANAGER — AUTO BACKUP TELEGRAM VPS   "
-    echo "==============================================="
+    echo "================================================="
+    echo "   CONFIG MANAGER — AUTO BACKUP TELEGRAM VPS"
+    echo "================================================="
     echo ""
     echo "BOT Token       : $BOT_TOKEN"
     echo "Chat ID         : $CHAT_ID"
     echo "Timezone        : $TZ"
     echo "Retention       : $RETENTION_DAYS hari"
     echo ""
+
     echo "Folder Backup:"
     if [[ -z "$FOLDERS_RAW" ]]; then
         echo "  (kosong)"
     else
         echo "  $FOLDERS_RAW"
     fi
+
     echo ""
     echo "MySQL Config:"
     if [[ -z "$MYSQL_MULTI_CONF" ]]; then
@@ -42,17 +46,27 @@ show_menu() {
     fi
 
     echo ""
-    echo "=========== MENU ==========="
+    echo "==================== MENU ======================="
     echo "1) Tambah folder backup"
     echo "2) Hapus folder backup"
     echo "3) Tambah konfigurasi MySQL"
     echo "4) Hapus konfigurasi MySQL"
-    echo "5) Simpan & keluar"
-    echo "============================"
+    echo "5) Simpan perubahan & keluar"
+    echo "-----------------------"
+    echo "6) Ubah BOT TOKEN"
+    echo "7) Ubah CHAT ID"
+    echo "8) Ubah timezone"
+    echo "9) Ubah retention"
+    echo "10) Ubah jadwal backup"
+    echo "11) Lihat file config"
+    echo "12) Test backup sekarang"
+    echo "13) Restart systemd service/timer"
+    echo "0) Keluar tanpa menyimpan"
+    echo "================================================="
 }
 
 # ===============================
-#  FUNCTION: SAVE CONFIG
+#  SAVE CONFIG
 # ===============================
 save_config() {
 cat <<EOF > "$CONFIG"
@@ -107,7 +121,6 @@ delete_folder() {
     done
 
     read -p "Pilih nomor: " NUM
-
     if (( NUM < 1 || NUM > ${#FL[@]} )); then
         echo "Pilihan tidak valid!"
         return
@@ -120,7 +133,7 @@ delete_folder() {
 }
 
 # ===============================
-#  ADD MYSQL CONFIG
+#  ADD MYSQL
 # ===============================
 add_mysql() {
     echo "Tambah konfigurasi MySQL baru:"
@@ -154,7 +167,7 @@ add_mysql() {
 }
 
 # ===============================
-#  DELETE MYSQL CONFIG
+#  DELETE MYSQL
 # ===============================
 delete_mysql() {
     if [[ -z "$MYSQL_MULTI_CONF" ]]; then
@@ -163,7 +176,6 @@ delete_mysql() {
     fi
 
     IFS=';' read -ra LIST <<< "$MYSQL_MULTI_CONF"
-
     echo "Pilih konfigurasi untuk dihapus:"
     i=1
     for item in "${LIST[@]}"; do
@@ -172,7 +184,6 @@ delete_mysql() {
     done
 
     read -p "Nomor yang ingin dihapus: " NUM
-
     if (( NUM < 1 || NUM > ${#LIST[@]} )); then
         echo "Pilihan tidak valid!"
         return
@@ -182,6 +193,58 @@ delete_mysql() {
     MYSQL_MULTI_CONF=$(IFS=';'; echo "${LIST[*]}")
 
     echo "[OK] MySQL config dihapus!"
+}
+
+# ===============================
+#  NEW FEATURES
+# ===============================
+
+edit_token() {
+    read -p "Masukkan BOT TOKEN baru: " BOT_TOKEN
+    echo "[OK] BOT TOKEN diperbarui!"
+}
+
+edit_chatid() {
+    read -p "Masukkan CHAT ID baru: " CHAT_ID
+    echo "[OK] CHAT ID diperbarui!"
+}
+
+edit_timezone() {
+    read -p "Masukkan timezone baru (ex: Asia/Jakarta): " TZ
+    timedatectl set-timezone "$TZ"
+    echo "[OK] Timezone berhasil diganti!"
+}
+
+edit_retention() {
+    read -p "Masukkan jumlah hari retention baru: " RETENTION_DAYS
+    echo "[OK] Retention diperbarui!"
+}
+
+edit_schedule() {
+    read -p "Masukkan jadwal baru (format systemd: *-*-* 03:00:00): " SCH
+    sed -i "s|OnCalendar=.*|OnCalendar=$SCH|g" /etc/systemd/system/auto-backup.timer
+    systemctl daemon-reload
+    systemctl restart auto-backup.timer
+    echo "[OK] Jadwal backup diperbarui!"
+}
+
+show_config_file() {
+    echo "================ CONFIG FILE ================"
+    cat "$CONFIG"
+    echo "============================================"
+}
+
+test_backup() {
+    echo "[OK] Menjalankan backup..."
+    bash "$RUNNER"
+    echo "Selesai!"
+}
+
+restart_services() {
+    systemctl daemon-reload
+    systemctl restart auto-backup.service
+    systemctl restart auto-backup.timer
+    echo "[OK] Service & timer direstart."
 }
 
 # ===============================
@@ -196,7 +259,16 @@ while true; do
         2) delete_folder ;;
         3) add_mysql ;;
         4) delete_mysql ;;
-        5) save_config ;;
+        5) save_config ;;   # EXIT
+        6) edit_token ;;
+        7) edit_chatid ;;
+        8) edit_timezone ;;
+        9) edit_retention ;;
+        10) edit_schedule ;;
+        11) show_config_file ;;
+        12) test_backup ;;
+        13) restart_services ;;
+        0) exit 0 ;;
         *) echo "Pilihan tidak valid!" ;;
     esac
 
