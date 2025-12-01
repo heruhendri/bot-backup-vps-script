@@ -67,12 +67,6 @@ CONFIG_FILE="$INSTALL_DIR/config.conf"
 mkdir -p "$INSTALL_DIR"
 
 # ======================================================
-# SETTING TIMEZONE SYSTEM
-# ======================================================
-echo "[OK] Setting timezone sistem..."
-timedatectl set-timezone "$TZ"
-
-# ======================================================
 # 2. CREATE CONFIG FILE
 # ======================================================
 cat <<EOF > "$CONFIG_FILE"
@@ -98,8 +92,6 @@ cat <<'EOF' > "$INSTALL_DIR/backup-runner.sh"
 #!/bin/bash
 CONFIG_FILE="/opt/auto-backup/config.conf"
 source "$CONFIG_FILE"
-
-export TZ="$TZ"
 
 BACKUP_DIR="$INSTALL_DIR/backups"
 mkdir -p "$BACKUP_DIR"
@@ -129,6 +121,7 @@ if [[ "$USE_MYSQL" == "y" ]]; then
     IFS=';' read -r -a MYSQL_ITEMS <<< "$MYSQL_MULTI_CONF"
 
     for ITEM in "${MYSQL_ITEMS[@]}"; do
+        # Format: user:pass@host:db1,db2
         USERPASS=$(echo "$ITEM" | cut -d'@' -f1)
         HOSTDB=$(echo "$ITEM" | cut -d'@' -f2)
 
@@ -140,13 +133,17 @@ if [[ "$USE_MYSQL" == "y" ]]; then
 
         MYSQL_ARGS="-h$MYSQL_HOST -u$MYSQL_USER -p$MYSQL_PASS"
 
+        # backup semua DB
         if [[ "$MYSQL_DB_LIST" == "all" ]]; then
             OUTFILE="$TMP_DIR/mysql/${MYSQL_USER}@${MYSQL_HOST}_ALL.sql"
+            echo "[MySQL] Backup ALL DB -> $OUTFILE"
             mysqldump $MYSQL_ARGS --all-databases > "$OUTFILE" 2>/dev/null
         else
+            # backup masing-masing DB
             IFS=',' read -r -a DBARR <<< "$MYSQL_DB_LIST"
             for DB in "${DBARR[@]}"; do
                 OUTFILE="$TMP_DIR/mysql/${MYSQL_USER}@${MYSQL_HOST}_${DB}.sql"
+                echo "[MySQL] Backup DB $DB -> $OUTFILE"
                 mysqldump $MYSQL_ARGS "$DB" > "$OUTFILE" 2>/dev/null
             done
         fi
@@ -185,6 +182,7 @@ find "$BACKUP_DIR" -type f -mtime +$RETENTION_DAYS -delete
 EOF
 
 chmod +x "$INSTALL_DIR/backup-runner.sh"
+
 echo "[OK] Backup runner created."
 
 # ======================================================
@@ -197,9 +195,9 @@ After=network.target mysql.service mariadb.service postgresql.service
 
 [Service]
 Type=oneshot
-Environment="TZ=$TZ"
-ExecStart=/usr/bin/env TZ=$TZ $INSTALL_DIR/backup-runner.sh
+ExecStart=$INSTALL_DIR/backup-runner.sh
 User=root
+Environment=TZ=$TZ
 
 [Install]
 WantedBy=multi-user.target
