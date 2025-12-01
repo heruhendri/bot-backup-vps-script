@@ -53,9 +53,11 @@ Backup otomatis **folder + database** ke **Telegram**, berjalan sebagai **system
 
 Cukup jalankan:
 
+
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/master/install-backupvps-telegram.sh)
 ```
+
 
 Installer akan menanyakan:
 
