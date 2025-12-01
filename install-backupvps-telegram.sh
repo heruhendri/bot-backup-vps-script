@@ -329,7 +329,6 @@ show_status() {
     echo -e "\e[36m$WATERMARK_HEADER\e[0m"
     echo ""
 
-    # ---------- COLOR HELPERS ----------
     GREEN="\e[32m"
     RED="\e[31m"
     YELLOW="\e[33m"
@@ -339,97 +338,110 @@ show_status() {
     colorize() {
         case "$1" in
             active) echo -e "${GREEN}$1${RESET}" ;;
-            inactive) echo -e "${RED}$1${RESET}" ;;
+            inactive|dead) echo -e "${RED}$1${RESET}" ;;
             failed) echo -e "${RED}$1${RESET}" ;;
             *) echo -e "${YELLOW}$1${RESET}" ;;
         esac
     }
 
-    # ---------- SERVICE STATUS ----------
-    svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo "unknown")
-    svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null || echo "unknown")
+    # =========================================================
+    # SERVICE STATUS
+    # =========================================================
+    svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo unknown)
+    svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null || echo unknown)
 
     echo -e "Service status : $(colorize "$svc_active") (enabled: $svc_enabled)"
 
-    # ---------- TIMER STATUS ----------
-    tmr_active=$(systemctl is-active auto-backup.timer 2>/dev/null || echo "unknown")
-    tmr_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null || echo "unknown")
+    # =========================================================
+    # TIMER STATUS
+    # =========================================================
+    tmr_active=$(systemctl is-active auto-backup.timer 2>/dev/null || echo unknown)
+    tmr_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null || echo unknown)
 
     echo -e "Timer status   : $(colorize "$tmr_active") (enabled: $tmr_enabled)"
 
-    # ============================================================
-    # FIXED — NEXT RUN (3 fallback methods)
-    # ============================================================
+    # =========================================================
+    # NEXT RUN — Fallback 3 LAPIS
+    # =========================================================
 
     next_run=""
-    
-    # 1️⃣ Coba melalui list-timers
-    next_run=$(systemctl list-timers | grep auto-backup | awk '{print $2" "$3}' | head -n 1)
 
-    # 2️⃣ Jika kosong, pakai NextRunUSec
+    # METHOD 1 — list-timers
+    line=$(systemctl list-timers --all | grep auto-backup.timer | head -n1)
+    if [[ -n "$line" ]]; then
+        next_run=$(echo "$line" | awk '{print $2" "$3}')
+    fi
+
+    # METHOD 2 — systemd internal NextRunUSec
     if [[ -z "$next_run" ]]; then
-        next_usec=$(systemctl show auto-backup.timer -p NextRunUSec --value)
-        if [[ "$next_usec" =~ ^[0-9]+$ ]] && (( next_usec > 0 )); then
-            epoch=$(( next_usec / 1000000 ))
+        usec=$(systemctl show auto-backup.timer -p NextRunUSec --value)
+        if [[ "$usec" =~ ^[0-9]+$ ]] && ((usec > 0)); then
+            epoch=$((usec/1000000))
             next_run=$(date -d @"$epoch" "+%Y-%m-%d %H:%M:%S")
         fi
     fi
 
-    # 3️⃣ Jika tetap kosong, timer belum pernah jalan
+    # METHOD 3 — fallback terakhir
     if [[ -z "$next_run" ]]; then
-        next_run="(belum dijadwalkan / timer baru dibuat)"
+        next_run="(belum dijadwalkan / timer belum aktif)"
     fi
 
     echo -e "Next run       : ${BLUE}$next_run${RESET}"
 
-    # ============================================================
-    # TIME LEFT – dengan FIX untuk next-run tidak valid
-    # ============================================================
+    # =========================================================
+    # TIME LEFT
+    # =========================================================
 
     if [[ "$next_run" =~ ^\( ]]; then
         echo "Time left      : (tidak tersedia)"
     else
         next_epoch=$(date -d "$next_run" +%s 2>/dev/null || echo 0)
         now_epoch=$(date +%s)
-        diff=$(( next_epoch - now_epoch ))
+        diff=$((next_epoch - now_epoch))
 
         if (( diff <= 0 )); then
-            echo "Time left      : 0 detik"
+            echo -e "Time left      : ${RED}0 detik (jadwal terlewat / sedang menunggu)${RESET}"
         else
-            days=$(( diff / 86400 ))
-            hours=$(( (diff % 86400) / 3600 ))
-            minutes=$(( (diff % 3600) / 60 ))
-            seconds=$(( diff % 60 ))
+            d=$(( diff/86400 ))
+            h=$(( (diff%86400)/3600 ))
+            m=$(( (diff%3600)/60 ))
+            s=$(( diff%60 ))
 
             left=""
-            [[ $days -gt 0 ]] && left="$days hari "
-            [[ $hours -gt 0 ]] && left+="$hours jam "
-            [[ $minutes -gt 0 ]] && left+="$minutes menit "
-            left+="${seconds} detik"
+            [[ $d -gt 0 ]] && left="$left$d hari "
+            [[ $h -gt 0 ]] && left="$left$h jam "
+            [[ $m -gt 0 ]] && left="$left$m menit "
+            left="$left$s detik"
 
             echo -e "Time left      : ${GREEN}$left${RESET}"
 
-            # PROGRESS BAR NORMALIZED
-            interval=$(( next_epoch - now_epoch ))
-            percent=$(( 100 - (diff * 100 / interval) ))
-            (( percent < 0 )) && percent=0
-            (( percent > 100 )) && percent=100
+            # PROGRESS BAR (100% akurat)
+            total_interval=$(systemctl show auto-backup.timer -p RandomizedDelaySec --value 2>/dev/null || echo 0)
+
+            # fallback jika tidak tersedia
+            if (( total_interval == 0 )); then
+                total_interval=$((next_epoch - (next_epoch - diff)))
+            fi
+
+            percent=$(( 100 - (diff * 100 / total_interval) ))
+            [[ $percent -lt 0 ]] && percent=0
+            [[ $percent -gt 100 ]] && percent=100
+
             bars=$(( percent / 5 ))
-
             bar=""
-            for ((i=1; i<=bars; i++)); do bar+="█"; done
+            for ((i=1; i<=bars; i++)); do bar="${bar}█"; done
 
-            echo -e "Progress       : ${BLUE}$bar${RESET} ${percent}%"
+            echo -e "Progress       : ${BLUE}${bar}${RESET} $percent%"
         fi
     fi
 
-    # ============================================================
+    # =========================================================
     # LAST BACKUP
-    # ============================================================
-    BACKUP_DIR="$INSTALL_DIR/backups"
+    # =========================================================
 
+    BACKUP_DIR="$INSTALL_DIR/backups"
     if [[ ! -d "$BACKUP_DIR" ]]; then
-        echo "Last backup    : (direktori tidak ditemukan)"
+        echo "Last backup    : (backup dir tidak ditemukan)"
     else
         lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1)
         if [[ -z "$lastfile" ]]; then
@@ -440,27 +452,21 @@ show_status() {
         fi
     fi
 
-    # ============================================================
-    # LOG CHECK — ERROR DETECTION
-    # ============================================================
-    last_error=$(journalctl -u auto-backup.service -n 50 | grep -i "error" || true)
-    if [[ -n "$last_error" ]]; then
-        echo -e "\n${RED}⚠ Backup terakhir kemungkinan GAGAL!${RESET}"
+    # =========================================================
+    # ERROR DETECTION
+    # =========================================================
+    err=$(journalctl -u auto-backup.service -n 50 | grep -i "error" || true)
+    if [[ -n "$err" ]]; then
+        echo -e "\n${RED}⚠ PERINGATAN: Backup terakhir error!${RESET}"
     fi
 
-    # ============================================================
-    # LAST 3 LOGS
-    # ============================================================
-    echo -e "\n${BLUE}--- LOG TERBARU auto-backup.service ---${RESET}"
+    echo -e "\n${BLUE}--- Log terakhir auto-backup.service ---${RESET}"
     journalctl -u auto-backup.service -n 3 --no-pager || echo "(log tidak tersedia)"
 
     echo ""
     echo -e "\e[36m$WATERMARK_FOOTER\e[0m"
     pause
 }
-
-
-
 
 
 # ---------- Folder / MySQL / PG functions ----------
