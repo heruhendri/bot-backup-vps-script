@@ -54,40 +54,7 @@ Backup otomatis **folder + database** ke **Telegram**, berjalan sebagai **system
 Cukup jalankan:
 
 
-```bash
-bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/master/install-backupvps-telegram.sh)
-```
-
-
-Installer akan menanyakan:
-
-* Token bot Telegram
-* Chat ID
-* Folder yang ingin dibackup
-* Backup MySQL? (optional)
-* Backup PostgreSQL? (optional)
-* Daftar database MySQL (all / comma separated)
-* Retention days
-* Timezone
-* Jadwal backup (systemd timer format)
-
-Setelah selesai:
-
-* Service dibuat → `auto-backup.service`
-* Timer dibuat → `auto-backup.timer`
-* Installer otomatis menghapus dirinya
-
 ---
-
-# 🛠 **UPDATE KONFIGURASI (Tambah / Edit / Hapus)**
-
-Update dilakukan melalui script:
-
-```
-update-backup.sh
-```
-
-Jalankan:
 
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/master/update-backup.sh)
