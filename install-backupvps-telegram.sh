@@ -344,21 +344,29 @@ show_status() {
         esac
     }
 
-    # =========================================================
-    # SERVICE STATUS
-    # =========================================================
-    svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo unknown)
-    svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null || echo unknown)
+# ----- SERVICE STATUS -----
+SVC_ACTIVE=$(systemctl is-active auto-backup.service 2>/dev/null)
+SVC_ENABLED=$(systemctl is-enabled auto-backup.service 2>/dev/null)
 
-    echo -e "Service status : $(colorize "$svc_active") (enabled: $svc_enabled)"
+if [[ "$SVC_ACTIVE" == "active" ]]; then
+    SVC_SHOW="active (enabled: $SVC_ENABLED)"
+elif [[ "$SVC_ACTIVE" == "inactive" ]]; then
+    SVC_SHOW="inactive (enabled: $SVC_ENABLED)"
+elif [[ "$SVC_ACTIVE" == "failed" ]]; then
+    SVC_SHOW="FAILED ❌ (enabled: $SVC_ENABLED)"
+else
+    SVC_SHOW="unknown (enabled: $SVC_ENABLED)"
+fi
 
-    # =========================================================
-    # TIMER STATUS
-    # =========================================================
-    tmr_active=$(systemctl is-active auto-backup.timer 2>/dev/null || echo unknown)
-    tmr_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null || echo unknown)
+echo "Service status : $SVC_SHOW"
 
-    echo -e "Timer status   : $(colorize "$tmr_active") (enabled: $tmr_enabled)"
+
+# ----- TIMER STATUS -----
+TM_ACTIVE=$(systemctl is-active auto-backup.timer 2>/dev/null)
+TM_ENABLED=$(systemctl is-enabled auto-backup.timer 2>/dev/null)
+
+echo "Timer status   : $TM_ACTIVE (enabled: $TM_ENABLED)"
+
 
     # =========================================================
     # NEXT RUN — Fallback 3 LAPIS
