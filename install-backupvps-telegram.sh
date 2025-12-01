@@ -346,34 +346,47 @@ show_status() {
     }
 
     # ---------- SERVICE STATUS ----------
-    svc_active=$(systemctl is-active auto-backup.service 2>/dev/null)
-    svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null)
+    svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo "unknown")
+    svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null || echo "unknown")
 
     echo -e "Service status : $(colorize "$svc_active") (enabled: $svc_enabled)"
 
     # ---------- TIMER STATUS ----------
-    tmr_active=$(systemctl is-active auto-backup.timer 2>/dev/null)
-    tmr_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null)
+    tmr_active=$(systemctl is-active auto-backup.timer 2>/dev/null || echo "unknown")
+    tmr_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null || echo "unknown")
 
     echo -e "Timer status   : $(colorize "$tmr_active") (enabled: $tmr_enabled)"
 
-    # ---------- NEXT RUN ----------
-    next_run=$(systemctl list-timers --all | grep auto-backup | awk '{print $2" "$3}' | head -n1)
+    # ============================================================
+    # FIXED — NEXT RUN (3 fallback methods)
+    # ============================================================
 
+    next_run=""
+    
+    # 1️⃣ Coba melalui list-timers
+    next_run=$(systemctl list-timers | grep auto-backup | awk '{print $2" "$3}' | head -n 1)
+
+    # 2️⃣ Jika kosong, pakai NextRunUSec
     if [[ -z "$next_run" ]]; then
         next_usec=$(systemctl show auto-backup.timer -p NextRunUSec --value)
-        if [[ "$next_usec" -gt 0 ]]; then
-            next_epoch=$(( next_usec / 1000000 ))
-            next_run=$(date -d @"$next_epoch" "+%Y-%m-%d %H:%M:%S")
-        else
-            next_run="(belum dijadwalkan)"
+        if [[ "$next_usec" =~ ^[0-9]+$ ]] && (( next_usec > 0 )); then
+            epoch=$(( next_usec / 1000000 ))
+            next_run=$(date -d @"$epoch" "+%Y-%m-%d %H:%M:%S")
         fi
+    fi
+
+    # 3️⃣ Jika tetap kosong, timer belum pernah jalan
+    if [[ -z "$next_run" ]]; then
+        next_run="(belum dijadwalkan / timer baru dibuat)"
     fi
 
     echo -e "Next run       : ${BLUE}$next_run${RESET}"
 
-    # ---------- TIME LEFT ----------
-    if [[ "$next_run" == "(belum dijadwalkan)" ]]; then
+    # ============================================================
+    # TIME LEFT – dengan FIX untuk next-run tidak valid
+    # ============================================================
+
+    if [[ "$next_run" =~ ^\( ]]; then
         echo "Time left      : (tidak tersedia)"
     else
         next_epoch=$(date -d "$next_run" +%s 2>/dev/null || echo 0)
@@ -388,59 +401,64 @@ show_status() {
             minutes=$(( (diff % 3600) / 60 ))
             seconds=$(( diff % 60 ))
 
-            # build readable string
             left=""
-            [[ $days -gt 0 ]] && left="$left$days hari "
-            [[ $hours -gt 0 ]] && left="$left$hours jam "
-            [[ $minutes -gt 0 ]] && left="$left$minutes menit "
-            left="${left}${seconds} detik"
+            [[ $days -gt 0 ]] && left="$days hari "
+            [[ $hours -gt 0 ]] && left+="$hours jam "
+            [[ $minutes -gt 0 ]] && left+="$minutes menit "
+            left+="${seconds} detik"
 
             echo -e "Time left      : ${GREEN}$left${RESET}"
 
-            # PROGRESS BAR
-            total_interval=$(( next_epoch - (next_epoch - diff) ))
-            percent=$(( (diff * 100) / (diff + 1) ))
-            progress=$(( 100 - percent ))
-            bars=$(( progress / 5 ))
+            # PROGRESS BAR NORMALIZED
+            interval=$(( next_epoch - now_epoch ))
+            percent=$(( 100 - (diff * 100 / interval) ))
+            (( percent < 0 )) && percent=0
+            (( percent > 100 )) && percent=100
+            bars=$(( percent / 5 ))
 
             bar=""
-            for ((i=1; i<=bars; i++)); do bar="${bar}█"; done
+            for ((i=1; i<=bars; i++)); do bar+="█"; done
 
-            echo -e "Progress       : ${BLUE}${bar}${RESET} ${progress}%"
+            echo -e "Progress       : ${BLUE}$bar${RESET} ${percent}%"
         fi
     fi
 
-    # ---------- LAST BACKUP ----------
+    # ============================================================
+    # LAST BACKUP
+    # ============================================================
     BACKUP_DIR="$INSTALL_DIR/backups"
-    if [[ -d "$BACKUP_DIR" ]]; then
-        lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1)
-        if [[ -n "$lastfile" ]]; then
-            lastpath="$BACKUP_DIR/$lastfile"
-            lasttime=$(stat -c '%y' "$lastpath" 2>/dev/null | cut -d'.' -f1)
 
-            echo -e "Last backup    : ${GREEN}$lastfile${RESET} ($lasttime)"
-        else
-            echo "Last backup    : (belum ada backup)"
-        fi
+    if [[ ! -d "$BACKUP_DIR" ]]; then
+        echo "Last backup    : (direktori tidak ditemukan)"
     else
-        echo "Last backup    : (direktori backup tidak ditemukan)"
+        lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1)
+        if [[ -z "$lastfile" ]]; then
+            echo "Last backup    : (belum ada backup)"
+        else
+            lasttime=$(stat -c '%y' "$BACKUP_DIR/$lastfile" | cut -d'.' -f1)
+            echo -e "Last backup    : ${GREEN}$lastfile${RESET} ($lasttime)"
+        fi
     fi
 
-    # ---------- CHECK LAST BACKUP FAILED ----------
-    last_status=$(journalctl -u auto-backup.service -n 20 --no-pager | grep -i "ERROR" || true)
-
-    if [[ -n "$last_status" ]]; then
+    # ============================================================
+    # LOG CHECK — ERROR DETECTION
+    # ============================================================
+    last_error=$(journalctl -u auto-backup.service -n 50 | grep -i "error" || true)
+    if [[ -n "$last_error" ]]; then
         echo -e "\n${RED}⚠ Backup terakhir kemungkinan GAGAL!${RESET}"
     fi
 
-    # ---------- SHOW LAST 3 LOGS ----------
-    echo -e "\n${BLUE}--- 3 Log Terakhir auto-backup.service ---${RESET}"
-    journalctl -u auto-backup.service -n 3 --no-pager 2>/dev/null || echo "(log tidak tersedia)"
+    # ============================================================
+    # LAST 3 LOGS
+    # ============================================================
+    echo -e "\n${BLUE}--- LOG TERBARU auto-backup.service ---${RESET}"
+    journalctl -u auto-backup.service -n 3 --no-pager || echo "(log tidak tersedia)"
 
     echo ""
     echo -e "\e[36m$WATERMARK_FOOTER\e[0m"
     pause
 }
+
 
 
 
