@@ -330,73 +330,85 @@ show_status() {
     echo ""
 
     # ---------- SERVICE STATUS ----------
-    svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo "unknown")
-    svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null || echo "unknown")
+    # service oneshot memang selalu "inactive" setelah run -> tampilkan dengan benar
+    svc_active=$(systemctl is-active auto-backup.service 2>/dev/null)
+    svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null)
+
+    [[ -z "$svc_active" ]] && svc_active="unknown"
+    [[ -z "$svc_enabled" ]] && svc_enabled="unknown"
+
     echo "Service status : $svc_active (enabled: $svc_enabled)"
 
     # ---------- TIMER STATUS ----------
-    tmr_active=$(systemctl is-active auto-backup.timer 2>/dev/null || echo "unknown")
-    tmr_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null || echo "unknown")
+    tmr_active=$(systemctl is-active auto-backup.timer 2>/dev/null)
+    tmr_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null)
+
+    [[ -z "$tmr_active" ]] && tmr_active="unknown"
+    [[ -z "$tmr_enabled" ]] && tmr_enabled="unknown"
+
     echo "Timer status   : $tmr_active (enabled: $tmr_enabled)"
 
-    # ---------- NEXT SCHEDULED RUN ----------
-    next_usec=$(systemctl show auto-backup.timer -p NextRunUSec --value 2>/dev/null || echo "0")
+    # ---------- NEXT RUN (STABLE METHOD) ----------
+    next_run=$(systemctl list-timers --all | grep auto-backup | awk '{print $2" "$3}' | head -n1)
 
-    if [[ "$next_usec" == "0" || "$next_usec" == "" ]]; then
-        next_run="(tidak tersedia)"
-        time_left="(tidak tersedia)"
-    else
-        # convert microseconds -> epoch
-        next_epoch=$(( next_usec / 1000000 ))
-        next_run=$(date -d @"$next_epoch" "+%Y-%m-%d %H:%M:%S")
-
-        # ---------- TIME LEFT ----------
-        now_epoch=$(date +%s)
-        diff=$(( next_epoch - now_epoch ))
-
-        if (( diff <= 0 )); then
-            time_left="0 detik (jadwal berjalan atau sudah lewat)"
+    if [[ -z "$next_run" ]]; then
+        # fallback to NextRunUSec if not yet calculated
+        next_usec=$(systemctl show auto-backup.timer -p NextRunUSec --value)
+        if [[ "$next_usec" -gt 0 ]]; then
+            next_epoch=$(( next_usec / 1000000 ))
+            next_run=$(date -d @"$next_epoch" "+%Y-%m-%d %H:%M:%S")
         else
+            next_run="(belum dijadwalkan)"
+        fi
+    fi
+
+    echo "Next run       : $next_run"
+
+    # ---------- TIME LEFT ----------
+    if [[ "$next_run" == "(belum dijadwalkan)" || "$next_run" == "(tidak tersedia)" ]]; then
+        echo "Time left      : (tidak tersedia)"
+    else
+        next_epoch=$(date -d "$next_run" +%s 2>/dev/null || echo 0)
+        now_epoch=$(date +%s)
+
+        if (( next_epoch <= now_epoch )); then
+            echo "Time left      : 0 detik"
+        else
+            diff=$(( next_epoch - now_epoch ))
             days=$(( diff / 86400 ))
             hours=$(( (diff % 86400) / 3600 ))
             minutes=$(( (diff % 3600) / 60 ))
             seconds=$(( diff % 60 ))
 
-            # format rapi
-            time_left=""
-            [[ $days -gt 0 ]] && time_left="${time_left}${days} hari "
-            [[ $hours -gt 0 ]] && time_left="${time_left}${hours} jam "
-            [[ $minutes -gt 0 ]] && time_left="${time_left}${minutes} menit "
-            time_left="${time_left}${seconds} detik"
+            tf=""
+            [[ $days -gt 0 ]] && tf="$tf$days hari "
+            [[ $hours -gt 0 ]] && tf="$tf$hours jam "
+            [[ $minutes -gt 0 ]] && tf="$tf$minutes menit "
+            tf="${tf}${seconds} detik"
+
+            echo "Time left      : $tf"
         fi
     fi
 
-    echo "Next run       : $next_run"
-    echo "Time left      : $time_left"
-
     # ---------- LAST BACKUP ----------
     BACKUP_DIR="$INSTALL_DIR/backups"
-    if [[ ! -d "$BACKUP_DIR" ]]; then
-        echo "Last backup    : (direktori tidak ditemukan)"
-    else
+    if [[ -d "$BACKUP_DIR" ]]; then
         lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1)
-        if [[ -z "$lastfile" ]]; then
-            echo "Last backup    : (belum ada backup)"
+        if [[ -n "$lastfile" ]]; then
+            lasttime=$(stat -c '%y' "$BACKUP_DIR/$lastfile" 2>/dev/null | cut -d'.' -f1)
+            echo "Last backup    : $lastfile ($lasttime)"
         else
-            lastpath="$BACKUP_DIR/$lastfile"
-            if [[ -f "$lastpath" ]]; then
-                lasttime=$(stat -c '%y' "$lastpath" 2>/dev/null | cut -d'.' -f1)
-                echo "Last backup    : $lastfile ($lasttime)"
-            else
-                echo "Last backup    : (file tidak ditemukan)"
-            fi
+            echo "Last backup    : (belum ada backup)"
         fi
+    else
+        echo "Last backup    : (folder backup tidak ditemukan)"
     fi
 
     echo ""
     echo "$WATERMARK_FOOTER"
     pause
 }
+
 
 
 # ---------- Folder / MySQL / PG functions ----------
