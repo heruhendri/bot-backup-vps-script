@@ -13,49 +13,6 @@ Support: https://t.me/GbtTapiPngnSndiri
 echo "$WATERMARK_INSTALL"
 echo ""
 
-# ======================================================
-# Basic inputs
-# ======================================================
-read -p "Masukkan TOKEN Bot Telegram: " BOT_TOKEN
-read -p "Masukkan CHAT_ID Telegram: " CHAT_ID
-read -p "Masukkan folder yang mau di-backup (comma separated, contoh: /etc,/var/www): " FOLDERS_RAW
-
-read -p "Backup MySQL? (y/n): " USE_MYSQL
-MYSQL_MULTI_CONF=""
-if [[ "$USE_MYSQL" == "y" ]]; then
-    echo ""
-    read -p "Berapa konfigurasi MySQL yang ingin Anda tambahkan? " MYSQL_COUNT
-    for ((i=1; i<=MYSQL_COUNT; i++)); do
-        echo ""
-        echo "📌 Konfigurasi MySQL ke-$i"
-        read -p "MySQL Host (default: localhost): " MYSQL_HOST
-        MYSQL_HOST=${MYSQL_HOST:-localhost}
-        read -p "MySQL Username: " MYSQL_USER
-        read -s -p "MySQL Password: " MYSQL_PASS
-        echo ""
-        echo "Mode backup database:"
-        echo "1) Backup SEMUA database"
-        echo "2) Pilih database tertentu"
-        read -p "Pilih (1/2): " MODE
-        if [[ "$MODE" == "1" ]]; then
-            DBLIST="all"
-        else
-            read -p "Masukkan daftar DB (comma separated, ex: db1,db2): " DBLIST
-        fi
-        ENTRY="${MYSQL_USER}:${MYSQL_PASS}@${MYSQL_HOST}:${DBLIST}"
-        if [[ -z "$MYSQL_MULTI_CONF" ]]; then
-            MYSQL_MULTI_CONF="$ENTRY"
-        else
-            MYSQL_MULTI_CONF="${MYSQL_MULTI_CONF};${ENTRY}"
-        fi
-    done
-fi
-
-read -p "Backup PostgreSQL? (y/n): " USE_PG
-read -p "Retention (berapa hari file backup disimpan): " RETENTION_DAYS
-read -p "Timezone (contoh: Asia/Jakarta): " TZ
-read -p "Jadwal cron (format systemd timer, contoh: *-*-* 03:00:00): " CRON_TIME
-
 INSTALL_DIR="/opt/auto-backup"
 CONFIG_FILE="$INSTALL_DIR/config.conf"
 MENU_FILE="$INSTALL_DIR/menu.sh"
@@ -66,14 +23,75 @@ TIMER_FILE="/etc/systemd/system/auto-backup.timer"
 mkdir -p "$INSTALL_DIR"
 chmod 755 "$INSTALL_DIR"
 
-echo ""
-echo "[OK] Setting timezone sistem => $TZ"
-timedatectl set-timezone "$TZ" || echo "[WARN] timedatectl set-timezone mungkin gagal jika tidak dijalankan sebagai root"
+# If config exists, ask whether to update
+if [[ -f "$CONFIG_FILE" ]]; then
+    echo "[INFO] Config ditemukan: $CONFIG_FILE"
+    read -p "Config sudah ada. Update config dan lanjut installer? (y/N): " RESP_UPD
+    RESP_UPD=${RESP_UPD:-n}
+    if [[ "$RESP_UPD" =~ ^[Yy]$ ]]; then
+        UPDATE_CONFIG="y"
+    else
+        UPDATE_CONFIG="n"
+    fi
+else
+    UPDATE_CONFIG="y"
+fi
 
-# ======================================================
-# Write config
-# ======================================================
-cat > "$CONFIG_FILE" <<EOF
+# If updating or no config, ask for inputs. If not updating, load existing.
+if [[ "$UPDATE_CONFIG" == "y" ]]; then
+    echo ""
+    # ======================================================
+    # Basic inputs
+    # ======================================================
+    read -p "Masukkan TOKEN Bot Telegram: " BOT_TOKEN
+    read -p "Masukkan CHAT_ID Telegram: " CHAT_ID
+    read -p "Masukkan folder yang mau di-backup (comma separated, contoh: /etc,/var/www): " FOLDERS_RAW
+
+    read -p "Backup MySQL? (y/n): " USE_MYSQL
+    MYSQL_MULTI_CONF=""
+    if [[ "$USE_MYSQL" == "y" ]]; then
+        echo ""
+        read -p "Berapa konfigurasi MySQL yang ingin Anda tambahkan? " MYSQL_COUNT
+        MYSQL_COUNT=${MYSQL_COUNT:-0}
+        for ((i=1; i<=MYSQL_COUNT; i++)); do
+            echo ""
+            echo "📌 Konfigurasi MySQL ke-$i"
+            read -p "MySQL Host (default: localhost): " MYSQL_HOST
+            MYSQL_HOST=${MYSQL_HOST:-localhost}
+            read -p "MySQL Username: " MYSQL_USER
+            read -s -p "MySQL Password: " MYSQL_PASS
+            echo ""
+            echo "Mode backup database:"
+            echo "1) Backup SEMUA database"
+            echo "2) Pilih database tertentu"
+            read -p "Pilih (1/2): " MODE
+            if [[ "$MODE" == "1" ]]; then
+                DBLIST="all"
+            else
+                read -p "Masukkan daftar DB (comma separated, ex: db1,db2): " DBLIST
+            fi
+            ENTRY="${MYSQL_USER}:${MYSQL_PASS}@${MYSQL_HOST}:${DBLIST}"
+            if [[ -z "$MYSQL_MULTI_CONF" ]]; then
+                MYSQL_MULTI_CONF="$ENTRY"
+            else
+                MYSQL_MULTI_CONF="${MYSQL_MULTI_CONF};${ENTRY}"
+            fi
+        done
+    else
+        MYSQL_MULTI_CONF=""
+    fi
+
+    read -p "Backup PostgreSQL? (y/n): " USE_PG
+    read -p "Retention (berapa hari file backup disimpan): " RETENTION_DAYS
+    read -p "Timezone (contoh: Asia/Jakarta): " TZ
+    read -p "Jadwal cron (format systemd timer, contoh: *-*-* 03:00:00): " CRON_TIME
+
+    echo ""
+    echo "[OK] Setting timezone sistem => $TZ"
+    timedatectl set-timezone "$TZ" || echo "[WARN] timedatectl set-timezone mungkin gagal jika tidak dijalankan sebagai root"
+
+    # Write config (secure)
+    cat > "$CONFIG_FILE" <<EOF
 BOT_TOKEN="$BOT_TOKEN"
 CHAT_ID="$CHAT_ID"
 FOLDERS_RAW="$FOLDERS_RAW"
@@ -87,8 +105,20 @@ TZ="$TZ"
 INSTALL_DIR="$INSTALL_DIR"
 EOF
 
-chmod 600 "$CONFIG_FILE"
-echo "[OK] Config saved: $CONFIG_FILE"
+    chmod 600 "$CONFIG_FILE"
+    echo "[OK] Config saved: $CONFIG_FILE"
+else
+    # load existing config for installer to use
+    echo "[INFO] Menggunakan config yang sudah ada: $CONFIG_FILE"
+    # shellcheck source=/dev/null
+    source "$CONFIG_FILE"
+    # ensure defaults exist
+    FOLDERS_RAW=${FOLDERS_RAW:-""}
+    MYSQL_MULTI_CONF=${MYSQL_MULTI_CONF:-""}
+    RETENTION_DAYS=${RETENTION_DAYS:-30}
+    TZ=${TZ:-UTC}
+    CRON_TIME=${CRON_TIME:-"*-*-* 03:00:00"}
+fi
 
 # ======================================================
 # Create backup-runner (safe literal - won't expand now)
@@ -99,6 +129,7 @@ set -euo pipefail
 
 CONFIG_FILE="/opt/auto-backup/config.conf"
 if [[ -f "$CONFIG_FILE" ]]; then
+    # shellcheck source=/dev/null
     source "$CONFIG_FILE"
 else
     echo "[ERROR] Config not found: $CONFIG_FILE"
@@ -120,7 +151,6 @@ mkdir -p "$TMP_DIR"
 IFS=',' read -r -a FOLDERS <<< "${FOLDERS_RAW:-}"
 for f in "${FOLDERS[@]}"; do
     if [[ -d "$f" ]]; then
-        # preserve attributes and symlinks
         cp -a "$f" "$TMP_DIR/" || true
     fi
 done
@@ -223,9 +253,12 @@ echo "[OK] systemd service & timer configured."
 
 # ======================================================
 # Install menu (menu PRO — full content based on your menu)
+# with watermark header+footer and menu status option
 # ======================================================
 cat > "$MENU_FILE" <<'MENU'
 #!/bin/bash
+set -euo pipefail
+
 # PRO Menu for Auto Backup VPS — TELEGRAM BOT
 # Location expected: /opt/auto-backup/menu.sh
 
@@ -236,11 +269,21 @@ SERVICE_FILE="/etc/systemd/system/auto-backup.service"
 TIMER_FILE="/etc/systemd/system/auto-backup.timer"
 LOGFILE="$INSTALL_DIR/menu-pro.log"
 
+WATERMARK_HEADER="=== AUTO BACKUP VPS — MENU PRO ===
+SCRIPT BY: HENDRI
+SUPPORT: https://t.me/GbtTapiPngnSndiri
+========================================"
+WATERMARK_FOOTER="========================================
+SCRIPT BY: HENDRI — AUTO BACKUP VPS
+Support: https://t.me/GbtTapiPngnSndiri"
+
 if [[ ! -f "$CONFIG" ]]; then
     echo "Config tidak ditemukan di $CONFIG. Jalankan installer terlebih dahulu." | tee -a "$LOGFILE"
     exit 1
 fi
 
+# load config
+# shellcheck source=/dev/null
 source "$CONFIG"
 
 save_config() {
@@ -257,6 +300,7 @@ RETENTION_DAYS="$RETENTION_DAYS"
 TZ="$TZ"
 INSTALL_DIR="$INSTALL_DIR"
 EOF
+    chmod 600 "$CONFIG"
     echo "[$(date '+%F %T')] Config saved." >> "$LOGFILE"
 }
 
@@ -280,6 +324,50 @@ confirm() {
     esac
 }
 
+# ---------- Status Menu ----------
+show_status() {
+    echo "$WATERMARK_HEADER"
+    echo ""
+    # service status
+    svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo "unknown")
+    svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null || echo "unknown")
+    echo "Service status : $svc_active (enabled: $svc_enabled)"
+
+    # timer status
+    tmr_active=$(systemctl is-active auto-backup.timer 2>/dev/null || echo "unknown")
+    tmr_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null || echo "unknown")
+    echo "Timer status   : $tmr_active (enabled: $tmr_enabled)"
+
+    # next scheduled run using systemctl show
+    next_run=$(systemctl show -p NextElapse --value auto-backup.timer 2>/dev/null || echo "unknown")
+    if [[ -z "$next_run" ]]; then next_run="(tidak tersedia)"; fi
+    echo "Next run       : $next_run"
+
+    # last backup (latest file in backups)
+    BACKUP_DIR="$INSTALL_DIR/backups"
+    if [[ -d "$BACKUP_DIR" ]]; then
+        lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1 || true)
+        if [[ -n "$lastfile" ]]; then
+            lastpath="$BACKUP_DIR/$lastfile"
+            if [[ -f "$lastpath" ]]; then
+                lasttime=$(stat -c '%y' "$lastpath" 2>/dev/null || echo "(waktu tidak tersedia)")
+                echo "Last backup    : $lastfile ( $lasttime )"
+            else
+                echo "Last backup    : (tidak ada file backup)"
+            fi
+        else
+            echo "Last backup    : (tidak ada file backup)"
+        fi
+    else
+        echo "Last backup    : (direktori backup tidak ada)"
+    fi
+
+    echo ""
+    echo "$WATERMARK_FOOTER"
+    pause
+}
+
+# ---------- Folder / MySQL / PG functions ----------
 add_folder() {
     read -p "Masukkan folder baru (single path, atau comma separated): " NEW_FOLDER
     if [[ -z "$NEW_FOLDER" ]]; then
@@ -572,8 +660,11 @@ test_backup() {
     echo "Selesai. Periksa Telegram / $INSTALL_DIR/backups"
 }
 
+# Main menu
 while true; do
     clear
+    echo "$WATERMARK_HEADER"
+    echo ""
     echo "=============================================="
     echo "   AUTO BACKUP — MENU PRO (Telegram VPS)"
     echo "=============================================="
@@ -595,6 +686,7 @@ while true; do
     echo "16) Encrypt latest backup (zip with password)"
     echo "17) Restart service & timer"
     echo "18) Simpan config"
+    echo "19) Status (service / last backup / next run)"
     echo "0) Keluar (tanpa simpan)"
     echo "----------------------------------------------"
     read -p "Pilih menu: " opt
@@ -618,6 +710,7 @@ while true; do
         16) encrypt_last_backup; pause ;;
         17) reload_systemd; pause ;;
         18) save_config; pause ;;
+        19) show_status; pause ;;
         0) echo "Keluar tanpa menyimpan." ; break ;;
         *) echo "Pilihan tidak valid." ; sleep 1 ;;
     esac
@@ -633,7 +726,7 @@ chmod +x /usr/bin/menu-bot-backup
 echo "[OK] Menu PRO installed: menu-bot-backup (run 'menu-bot-backup' to open)"
 
 # ======================================================
-# Finalize
+# Finalize installer
 # ======================================================
 echo ""
 echo "$WATERMARK_END"
