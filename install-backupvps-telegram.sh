@@ -241,6 +241,7 @@ echo "Testing backup pertama..."
 bash "$INSTALL_DIR/backup-runner.sh"
 echo "Backup pertama dikirim ke Telegram."
 
+
 echo ""
 echo "Menghapus file installer..."
 rm -- "$0"
