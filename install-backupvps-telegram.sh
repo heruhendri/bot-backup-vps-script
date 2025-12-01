@@ -1,164 +1,268 @@
 #!/bin/bash
 clear
 
-# ==================================================
-#  AUTO INSTALLER BACKUP VPS — TELEGRAM (DASHBOARD)
-# ==================================================
+### WATERMARK: AWAL INSTALL
+echo ""
+echo "==============================================="
+echo "   AUTO BACKUP VPS — TELEGRAM BOT INSTALLER   "
+echo "   © 2025 — Heru Hendri Auto Backup System     "
+echo "==============================================="
+echo ""
 
-# --------------------------------------------
-#  CEK & INSTALL dialog
-# --------------------------------------------
-if ! command -v dialog &> /dev/null; then
-    echo "dialog belum terpasang. Menginstall..."
-    apt update -y
-    apt install dialog -y || {
-        echo "Gagal install dialog."
-        exit 1
-    }
+### ERROR HANDLER + CONTACT SUPPORT
+trap 'echo ""; 
+      echo "==============================================="; 
+      echo "[ERROR] Ada kesalahan selama proses instalasi."; 
+      echo "Silakan hubungi support: @heruhendri"; 
+      echo "==============================================="; 
+      exit 1;' ERR
+
+echo "========================================="
+echo "     AUTO BACKUP VPS — TELEGRAM BOT      "
+echo "========================================="
+
+# ======================================================
+# 1. INPUT
+# ======================================================
+read -p "Masukkan TOKEN Bot Telegram: " BOT_TOKEN
+read -p "Masukkan CHAT_ID Telegram: " CHAT_ID
+read -p "Masukkan folder yang mau di-backup (comma separated, contoh: /etc,/var/www): " FOLDERS_RAW
+
+# ======================================================
+#  MYSQL MULTI CONFIG INPUT
+# ======================================================
+read -p "Backup MySQL? (y/n): " USE_MYSQL
+MYSQL_MULTI_CONF=""
+if [[ "$USE_MYSQL" == "y" ]]; then
+    echo ""
+    read -p "Berapa konfigurasi MySQL yang ingin Anda tambahkan? " MYSQL_COUNT
+    
+    for ((i=1; i<=MYSQL_COUNT; i++)); do
+        echo ""
+        echo "📌 Konfigurasi MySQL ke-$i"
+        
+        read -p "MySQL Host (default: localhost): " MYSQL_HOST
+        MYSQL_HOST=${MYSQL_HOST:-localhost}
+
+        read -p "MySQL Username: " MYSQL_USER
+        read -s -p "MySQL Password: " MYSQL_PASS
+        echo ""
+
+        echo "Mode backup database:"
+        echo "1) Backup SEMUA database"
+        echo "2) Pilih database tertentu"
+        read -p "Pilih (1/2): " MODE
+
+        if [[ "$MODE" == "1" ]]; then
+            DBLIST="all"
+        else
+            read -p "Masukkan daftar DB (comma separated, ex: db1,db2): " DBLIST
+        fi
+
+        ENTRY="${MYSQL_USER}:${MYSQL_PASS}@${MYSQL_HOST}:${DBLIST}"
+
+        if [[ -z "$MYSQL_MULTI_CONF" ]]; then
+            MYSQL_MULTI_CONF="$ENTRY"
+        else
+            MYSQL_MULTI_CONF="${MYSQL_MULTI_CONF};${ENTRY}"
+        fi
+    done
 fi
 
-# --------------------------------------------
-#  FUNGSI INSTALL BOT
-# --------------------------------------------
-install_bot(){
-    clear
-    dialog --msgbox "Mulai instalasi Bot Backup VPS..." 7 40
+# ======================================================
+#  POSTGRES INPUT
+# ======================================================
+read -p "Backup PostgreSQL? (y/n): " USE_PG
+read -p "Retention (berapa hari file backup disimpan): " RETENTION_DAYS
+read -p "Timezone (contoh: Asia/Jakarta): " TZ
+read -p "Jadwal cron (format systemd timer, contoh: *-*-* 03:00:00): " CRON_TIME
 
-    apt update -y
-    apt install -y curl jq wget unzip cron
+INSTALL_DIR="/opt/auto-backup"
+CONFIG_FILE="$INSTALL_DIR/config.conf"
 
-    # Folder bot
-    mkdir -p /opt/bot-backup
-    cd /opt/bot-backup || exit
+mkdir -p "$INSTALL_DIR"
 
-    # Buat file config default
-    cat > config.json << END
-{
-    "bot_token": "ISI_TOKEN_BOT",
-    "chat_id": "ISI_CHAT_ID",
-    "backup_path": "/root",
-    "backup_dir": "/opt/bot-backup/data",
-    "retention_days": 3
-}
-END
+# ======================================================
+# SETTING TIMEZONE SYSTEM
+# ======================================================
+echo "[OK] Setting timezone sistem..."
+timedatectl set-timezone "$TZ"
 
-    mkdir -p data logs
+# ======================================================
+# 2. CREATE CONFIG FILE
+# ======================================================
+cat <<EOF > "$CONFIG_FILE"
+BOT_TOKEN="$BOT_TOKEN"
+CHAT_ID="$CHAT_ID"
+FOLDERS_RAW="$FOLDERS_RAW"
 
-    # File bot utama
-    cat > bot-backup.sh << 'EOF'
+USE_MYSQL="$USE_MYSQL"
+MYSQL_MULTI_CONF="$MYSQL_MULTI_CONF"
+
+USE_PG="$USE_PG"
+RETENTION_DAYS="$RETENTION_DAYS"
+TZ="$TZ"
+INSTALL_DIR="$INSTALL_DIR"
+EOF
+
+echo "[OK] Config saved: $CONFIG_FILE"
+
+# ======================================================
+# 3. CREATE BACKUP RUNNER
+# ======================================================
+cat <<'EOF' > "$INSTALL_DIR/backup-runner.sh"
 #!/bin/bash
+CONFIG_FILE="/opt/auto-backup/config.conf"
+source "$CONFIG_FILE"
 
-CONFIG="/opt/bot-backup/config.json"
+export TZ="$TZ"
 
-TOKEN=$(jq -r .bot_token $CONFIG)
-CHAT_ID=$(jq -r .chat_id $CONFIG)
-BACKUP_PATH=$(jq -r .backup_path $CONFIG)
-RETENTION=$(jq -r .retention_days $CONFIG)
-BACKUP_DIR=$(jq -r .backup_dir $CONFIG)
-
-DATE=$(date "+%Y-%m-%d_%H-%M")
-FILE="backup-$DATE.tar.gz"
-
+BACKUP_DIR="$INSTALL_DIR/backups"
 mkdir -p "$BACKUP_DIR"
 
-tar -czf "$BACKUP_DIR/$FILE" $BACKUP_PATH 2>/opt/bot-backup/logs/error.log
+DATE=$(date +%F-%H%M)
+FILE="$BACKUP_DIR/backup-$DATE.tar.gz"
+TMP_DIR="$INSTALL_DIR/tmp-$DATE"
 
-curl -F document=@"$BACKUP_DIR/$FILE" \
-     -F chat_id="$CHAT_ID" \
-     -F caption="Backup VPS Selesai: $FILE" \
-     https://api.telegram.org/bot$TOKEN/sendDocument >/dev/null 2>&1
+mkdir -p "$TMP_DIR"
 
-# Auto bersihkan backup lama
-find "$BACKUP_DIR" -mtime +$RETENTION -delete
-EOF
-
-    chmod +x bot-backup.sh
-
-    # --------------------------------------------
-    #  BUAT DASHBOARD MENU
-    # --------------------------------------------
-    cat > /usr/bin/menu-bot-backup << 'EOF'
-#!/bin/bash
-CONFIG="/opt/bot-backup/config.json"
-
-TITLE="=== DASHBOARD BACKUP VPS ==="
-MENU=$(dialog --clear --stdout --title "$TITLE" --menu "Pilih Opsi:" 20 60 10 \
-1 "🛠  Set Token Bot" \
-2 "🆔  Set Chat ID" \
-3 "📁  Set Folder Backup" \
-4 "📂  Lihat File Backup" \
-5 "📨  Kirim Backup Sekarang" \
-6 "⏱  Jadwalkan Harian" \
-7 "🧹  Set Retensi Backup" \
-8 "📄  Lihat Konfigurasi" \
-9 "❌  Keluar")
-
-case $MENU in
-1)
-    TOKEN=$(dialog --stdout --inputbox "Masukkan token bot:" 8 50)
-    jq --arg t "$TOKEN" '.bot_token=$t' $CONFIG > /opt/bot-backup/tmp.json && mv /opt/bot-backup/tmp.json $CONFIG
-    ;;
-2)
-    CID=$(dialog --stdout --inputbox "Masukkan chat ID:" 8 50)
-    jq --arg c "$CID" '.chat_id=$c' $CONFIG > /opt/bot-backup/tmp.json && mv /opt/bot-backup/tmp.json $CONFIG
-    ;;
-3)
-    FOLDER=$(dialog --stdout --inputbox "Folder yang ingin di-backup:" 8 50)
-    jq --arg f "$FOLDER" '.backup_path=$f' $CONFIG > /opt/bot-backup/tmp.json && mv /opt/bot-backup/tmp.json $CONFIG
-    ;;
-4)
-    dialog --textbox /opt/bot-backup/logs/error.log 20 70
-    ;;
-5)
-    bash /opt/bot-backup/bot-backup.sh
-    dialog --msgbox "Backup terkirim!" 6 30
-    ;;
-6)
-    # Jadwal backup harian jam 00.00
-    echo "0 0 * * * root bash /opt/bot-backup/bot-backup.sh" > /etc/cron.d/backupbot
-    systemctl restart cron
-    dialog --msgbox "Jadwal harian diaktifkan!" 6 40
-    ;;
-7)
-    RET=$(dialog --stdout --inputbox "Retensi (hari):" 8 40)
-    jq --arg r "$RET" '.retention_days=$r|tonumber' $CONFIG > /opt/bot-backup/tmp.json && mv /opt/bot-backup/tmp.json $CONFIG
-    ;;
-8)
-    dialog --textbox $CONFIG 20 70
-    ;;
-9)
-    clear
-    exit
-    ;;
-esac
-
-bash /usr/bin/menu-bot-backup
-EOF
-
-    chmod +x /usr/bin/menu-bot-backup
-
-    dialog --msgbox "INSTALASI SELESAI!\n\nKetik: menu-bot-backup" 10 50
-    clear
-}
-
-# --------------------------------------------
-#  MENU INSTALLER
-# --------------------------------------------
-while true; do
-    CHOICE=$(dialog --clear --stdout --title "INSTALLER BOT BACKUP VPS" --menu "Pilih Menu:" 20 60 10 \
-    1 "Install Bot Backup VPS" \
-    2 "Update Script" \
-    3 "Uninstall Bot" \
-    4 "Keluar")
-
-    case "$CHOICE" in
-        1) install_bot ;;
-        2) dialog --msgbox "Belum tersedia." 6 30 ;;
-        3)
-            rm -rf /opt/bot-backup
-            rm -f /usr/bin/menu-bot-backup
-            dialog --msgbox "UNINSTALL BERHASIL" 6 30
-            ;;
-        4) clear; exit ;;
-    esac
+# ----------------------------
+#  BACKUP FOLDERS
+# ----------------------------
+IFS=',' read -r -a FOLDERS <<< "$FOLDERS_RAW"
+for f in "${FOLDERS[@]}"; do
+    if [ -d "$f" ]; then
+        cp -r "$f" "$TMP_DIR/"
+    fi
 done
+
+# ----------------------------
+#  BACKUP MYSQL MULTI CONFIG
+# ----------------------------
+if [[ "$USE_MYSQL" == "y" ]]; then
+    mkdir -p "$TMP_DIR/mysql"
+
+    IFS=';' read -r -a MYSQL_ITEMS <<< "$MYSQL_MULTI_CONF"
+
+    for ITEM in "${MYSQL_ITEMS[@]}"; do
+        USERPASS=$(echo "$ITEM" | cut -d'@' -f1)
+        HOSTDB=$(echo "$ITEM" | cut -d'@' -f2)
+
+        MYSQL_USER=$(echo "$USERPASS" | cut -d':' -f1)
+        MYSQL_PASS=$(echo "$USERPASS" | cut -d':' -f2)
+
+        MYSQL_HOST=$(echo "$HOSTDB" | cut -d':' -f1)
+        MYSQL_DB_LIST=$(echo "$HOSTDB" | cut -d':' -f2)
+
+        MYSQL_ARGS="-h$MYSQL_HOST -u$MYSQL_USER -p$MYSQL_PASS"
+
+        if [[ "$MYSQL_DB_LIST" == "all" ]]; then
+            OUTFILE="$TMP_DIR/mysql/${MYSQL_USER}@${MYSQL_HOST}_ALL.sql"
+            mysqldump $MYSQL_ARGS --all-databases > "$OUTFILE" 2>/dev/null
+        else
+            IFS=',' read -r -a DBARR <<< "$MYSQL_DB_LIST"
+            for DB in "${DBARR[@]}"; do
+                OUTFILE="$TMP_DIR/mysql/${MYSQL_USER}@${MYSQL_HOST}_${DB}.sql"
+                mysqldump $MYSQL_ARGS "$DB" > "$OUTFILE" 2>/dev/null
+            done
+        fi
+    done
+fi
+
+# ----------------------------
+#  BACKUP POSTGRESQL
+# ----------------------------
+if [[ "$USE_PG" == "y" ]]; then
+    mkdir -p "$TMP_DIR/postgres"
+    su - postgres -c "pg_dumpall > $TMP_DIR/postgres/all.sql"
+fi
+
+# ----------------------------
+#  CREATE TAR
+# ----------------------------
+tar -czf "$FILE" -C "$TMP_DIR" .
+
+# ----------------------------
+#  SEND TO TELEGRAM
+# ----------------------------
+curl -s -F document=@"$FILE" \
+     -F caption="Backup selesai: $(basename $FILE)" \
+     "https://api.telegram.org/bot$BOT_TOKEN/sendDocument?chat_id=$CHAT_ID"
+
+# ----------------------------
+#  AUTO CLEAN TEMP
+# ----------------------------
+rm -rf "$TMP_DIR"
+
+# ----------------------------
+#  RETENTION CLEANER
+# ----------------------------
+find "$BACKUP_DIR" -type f -mtime +$RETENTION_DAYS -delete
+EOF
+
+chmod +x "$INSTALL_DIR/backup-runner.sh"
+echo "[OK] Backup runner created."
+
+# ======================================================
+# 4. SYSTEMD SERVICE
+# ======================================================
+cat <<EOF > /etc/systemd/system/auto-backup.service
+[Unit]
+Description=Auto Backup VPS to Telegram
+After=network.target mysql.service mariadb.service postgresql.service
+
+[Service]
+Type=oneshot
+Environment="TZ=$TZ"
+ExecStart=/usr/bin/env TZ=$TZ $INSTALL_DIR/backup-runner.sh
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# ======================================================
+# 5. SYSTEMD TIMER
+# ======================================================
+cat <<EOF > /etc/systemd/system/auto-backup.timer
+[Unit]
+Description=Run Auto Backup VPS
+
+[Timer]
+OnCalendar=$CRON_TIME
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+# ======================================================
+# 6. ENABLE SERVICE + TIMER
+# ======================================================
+systemctl daemon-reload
+systemctl enable auto-backup.service
+systemctl enable --now auto-backup.timer
+
+echo ""
+echo "================================================"
+echo "         INSTALL COMPLETE — SUCCESS!           "
+echo "================================================"
+echo "Service  : auto-backup.service"
+echo "Timer    : auto-backup.timer"
+echo "Config   : $CONFIG_FILE"
+echo "Backup   : $INSTALL_DIR/backups"
+
+echo ""
+echo "Testing backup pertama..."
+bash "$INSTALL_DIR/backup-runner.sh"
+echo "Backup pertama dikirim ke Telegram."
+
+echo ""
+echo "==============================================="
+echo "      © 2025 Auto Backup System Completed       "
+echo "         Hubungi Support: @heruhendri           "
+echo "==============================================="
+
+echo ""
+echo "Menghapus file installer..."
+rm -- "$0"
