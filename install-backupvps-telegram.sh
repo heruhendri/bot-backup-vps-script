@@ -23,6 +23,27 @@ TIMER_FILE="/etc/systemd/system/auto-backup.timer"
 mkdir -p "$INSTALL_DIR"
 chmod 755 "$INSTALL_DIR"
 
+# Quick environment checks
+if [[ "$(id -u)" -ne 0 ]]; then
+    echo "[ERROR] Script must be run as root."
+    exit 1
+fi
+
+# Check for basic dependencies (only warn, do not abort).
+check_deps() {
+    local miss=0
+    for cmd in systemctl tar curl mktemp; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            echo "[WARN] Dependency missing: $cmd"
+            miss=1
+        fi
+    done
+    if (( miss )); then
+        echo "[WARN] Some commands are missing; script might still work partially."
+    fi
+}
+check_deps
+
 # Jika config ada → tanya update
 if [[ -f "$CONFIG_FILE" ]]; then
     echo "[INFO] Config ditemukan: $CONFIG_FILE"
@@ -90,16 +111,16 @@ else
 fi
 
 # ==== DEFAULT VALUE FIX (WAJIB) ====
-BOT_TOKEN="${BOT_TOKEN:-""}"
-CHAT_ID="${CHAT_ID:-""}"
-FOLDERS_RAW="${FOLDERS_RAW:-""}"
+BOT_TOKEN="${BOT_TOKEN:-}"
+CHAT_ID="${CHAT_ID:-}"
+FOLDERS_RAW="${FOLDERS_RAW:-}"
 USE_MYSQL="${USE_MYSQL:-n}"
-MYSQL_MULTI_CONF="${MYSQL_MULTI_CONF:-""}"
+MYSQL_MULTI_CONF="${MYSQL_MULTI_CONF:-}"
 USE_PG="${USE_PG:-n}"
 RETENTION_DAYS="${RETENTION_DAYS:-3}"
 TZ="${TZ:-Asia/Jakarta}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/auto-backup}"
-CRON_TIME="${CRON_TIME:-"*-*-* 03:00:00"}"
+CRON_TIME="${CRON_TIME:-*-*-* 03:00:00}"
 
 
 # ======================================================
@@ -131,7 +152,9 @@ mkdir -p "$TMP_DIR"
 # Backup folders
 IFS=',' read -r -a FOLDERS <<< "${FOLDERS_RAW:-}"
 for f in "${FOLDERS[@]}"; do
-    [[ -d "$f" ]] && cp -a "$f" "$TMP_DIR/" || true
+    if [[ -n "$f" && -d "$f" ]]; then
+        cp -a "$f" "$TMP_DIR/" || true
+    fi
 done
 
 # Backup MySQL Multi
@@ -147,15 +170,19 @@ if [[ "${USE_MYSQL:-n}" == "y" && -n "${MYSQL_MULTI_CONF:-}" ]]; then
         MYSQL_DB_LIST=$(echo "$HOSTDB" | cut -d':' -f2)
         MYSQL_ARGS="-h$MYSQL_HOST -u$MYSQL_USER -p$MYSQL_PASS"
 
-        if [[ "$MYSQL_DB_LIST" == "all" ]]; then
-            OUT="$TMP_DIR/mysql/${MYSQL_USER}@${MYSQL_HOST}_ALL.sql"
-            mysqldump $MYSQL_ARGS --all-databases > "$OUT" 2>/dev/null || true
+        if command -v mysqldump >/dev/null 2>&1; then
+            if [[ "$MYSQL_DB_LIST" == "all" ]]; then
+                OUT="$TMP_DIR/mysql/${MYSQL_USER}@${MYSQL_HOST}_ALL.sql"
+                mysqldump $MYSQL_ARGS --all-databases > "$OUT" 2>/dev/null || true
+            else
+                IFS=',' read -r -a DBARR <<< "$MYSQL_DB_LIST"
+                for DB in "${DBARR[@]}"; do
+                    OUT="$TMP_DIR/mysql/${MYSQL_USER}@${MYSQL_HOST}_${DB}.sql"
+                    mysqldump $MYSQL_ARGS "$DB" > "$OUT" 2>/dev/null || true
+                done
+            fi
         else
-            IFS=',' read -r -a DBARR <<< "$MYSQL_DB_LIST"
-            for DB in "${DBARR[@]}"; do
-                OUT="$TMP_DIR/mysql/${MYSQL_USER}@${MYSQL_HOST}_${DB}.sql"
-                mysqldump $MYSQL_ARGS "$DB" > "$OUT" 2>/dev/null || true
-            done
+            echo "[WARN] mysqldump not found; skipping MySQL backups."
         fi
     done
 fi
@@ -163,24 +190,37 @@ fi
 # Backup PostgreSQL
 if [[ "${USE_PG:-n}" == "y" ]]; then
     mkdir -p "$TMP_DIR/postgres"
-    if id -u postgres >/dev/null 2>&1; then
-        su - postgres -c "pg_dumpall > $TMP_DIR/postgres/all.sql" || true
+    if command -v pg_dumpall >/dev/null 2>&1; then
+        if id -u postgres >/dev/null 2>&1; then
+            su - postgres -c "pg_dumpall > $TMP_DIR/postgres/all.sql" || true
+        else
+            pg_dumpall > "$TMP_DIR/postgres/all.sql" 2>/dev/null || true
+        fi
+    else
+        echo "[WARN] psql/pg_dumpall not found; skipping PG backup."
     fi
 fi
 
-tar -czf "$FILE" -C "$TMP_DIR" .
+tar -czf "$FILE" -C "$TMP_DIR" . || true
 
 # Send to Telegram
-if [[ -n "$BOT_TOKEN" && -n "$CHAT_ID" ]]; then
-    curl -s -F document=@"$FILE" \
-         -F caption="Backup selesai: $(basename "$FILE")" \
+if [[ -n "${BOT_TOKEN:-}" && -n "${CHAT_ID:-}" ]] && command -v curl >/dev/null 2>&1; then
+    curl -s -F "document=@${FILE}" \
+         -F "caption=Backup selesai: $(basename "$FILE")" \
          "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}" || true
+else
+    echo "[WARN] BOT_TOKEN or CHAT_ID missing or curl not installed; skipping Telegram upload."
 fi
 
 rm -rf "$TMP_DIR"
 
-# Retensi
-find "$BACKUP_DIR" -type f -mtime +"${RETENTION_DAYS}" -delete || true
+# Retensi (fallback default)
+RET="${RETENTION_DAYS:-3}"
+if [[ "$RET" =~ ^[0-9]+$ ]]; then
+    find "$BACKUP_DIR" -type f -mtime +"${RET}" -delete || true
+else
+    echo "[WARN] RETENTION_DAYS invalid: $RET"
+fi
 
 echo "[OK] Backup done: $FILE"
 BPR
@@ -221,10 +261,10 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
-systemctl daemon-reload
-systemctl enable --now auto-backup.timer
-systemctl enable auto-backup.service
-echo "[OK] Systemd service & timer aktif."
+systemctl daemon-reload || true
+systemctl enable --now auto-backup.timer || true
+systemctl enable auto-backup.service || true
+echo "[OK] Systemd service & timer aktif (jika tersedia)."
 
 # ======================================================
 #  MENU PRO (FULL)
@@ -277,30 +317,30 @@ show_status() {
     RESET="\e[0m"
 
     # SERVICE
-    svc_active=$(systemctl is-active "$SERVICE")
-    svc_enabled=$(systemctl is-enabled "$SERVICE")
+    svc_active=$(systemctl is-active "$SERVICE" 2>/dev/null || echo "inactive")
+    svc_enabled=$(systemctl is-enabled "$SERVICE" 2>/dev/null || echo "disabled")
     echo "Service status : $svc_active (enabled: $svc_enabled)"
 
     # TIMER
-    tm_active=$(systemctl is-active "$TIMER")
-    tm_enabled=$(systemctl is-enabled "$TIMER")
+    tm_active=$(systemctl is-active "$TIMER" 2>/dev/null || echo "inactive")
+    tm_enabled=$(systemctl is-enabled "$TIMER" 2>/dev/null || echo "disabled")
     echo "Timer status   : $tm_active (enabled: $tm_enabled)"
 
     # ========================================
     #    NEXT RUN (paling akurat)
     # ========================================
     next_run=""
-    row=$(systemctl list-timers --all | grep "$TIMER" | head -n1)
+    row=$(systemctl list-timers --all 2>/dev/null | grep -F "$TIMER" | head -n1 || true)
 
     if [[ -n "$row" ]]; then
         next_run=$(echo "$row" | awk '{print $1" "$2" "$3}')
     fi
 
     if [[ -z "$next_run" ]]; then
-        epoch=$(systemctl show "$TIMER" -p NextElapseUSec --value)
+        epoch=$(systemctl show "$TIMER" -p NextElapseUSec --value 2>/dev/null || echo "")
         if [[ "$epoch" =~ ^[0-9]+$ ]] && ((epoch > 0)); then
             epoch=$((epoch/1000000))
-            next_run=$(date -d @"$epoch" "+%Y-%m-%d %H:%M:%S")
+            next_run=$(date -d @"$epoch" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "")
         fi
     fi
 
@@ -315,7 +355,7 @@ show_status() {
         echo "Time left      : (tidak tersedia)"
         echo "Progress       : (tidak tersedia)"
     else
-        next_epoch=$(date -d "$next_run" +%s)
+        next_epoch=$(date -d "$next_run" +%s 2>/dev/null || echo 0)
         now_epoch=$(date +%s)
         diff=$((next_epoch - now_epoch))
 
@@ -338,8 +378,8 @@ show_status() {
 
             # ----- PROGRESS BAR -----
 
-            last_epoch=$(journalctl -u "$SERVICE" --output=short-unix -n 50 \
-                | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1)
+            last_epoch=$(journalctl -u "$SERVICE" --output=short-unix -n 50 2>/dev/null \
+                | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1 || echo "")
 
             if [[ -z "$last_epoch" ]]; then
                 echo "Progress       : (belum ada data)"
@@ -368,11 +408,11 @@ show_status() {
     if [[ ! -d "$BACKUP_DIR" ]]; then
         echo "Last backup    : (directory tidak ditemukan)"
     else
-        lastfile=$(ls -1t "$BACKUP_DIR" | head -n1)
+        lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1 || true)
         if [[ -z "$lastfile" ]]; then
             echo "Last backup    : (belum ada)"
         else
-            t=$(stat -c '%y' "$BACKUP_DIR/$lastfile" | cut -d'.' -f1)
+            t=$(stat -c '%y' "$BACKUP_DIR/$lastfile" 2>/dev/null | cut -d'.' -f1 || echo "(waktu tidak tersedia)")
             echo -e "Last backup    : ${GREEN}$lastfile${RESET} ($t)"
         fi
     fi
@@ -382,7 +422,7 @@ show_status() {
     # ========================================
     echo ""
     echo "--- Log terakhir ($SERVICE) ---"
-    journalctl -u "$SERVICE" -n 5 --no-pager || echo "(log tidak ada)"
+    journalctl -u "$SERVICE" -n 5 --no-pager 2>/dev/null || echo "(log tidak ada)"
 
     echo ""
     echo -e "\e[36m$WATERMARK_FOOTER\e[0m"
@@ -407,13 +447,14 @@ CRON_TIME="$CRON_TIME"
 EOF
     chmod 600 "$CONFIG"
     echo "[OK] Config disimpan."
+    systemctl daemon-reload 2>/dev/null || true
 }
 
 reload_systemd(){
-    systemctl daemon-reload
-    systemctl restart "$TIMER"
-    systemctl restart "$SERVICE"
-    echo "[OK] Service & Timer direstart."
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl restart "$TIMER" 2>/dev/null || true
+    systemctl restart "$SERVICE" 2>/dev/null || true
+    echo "[OK] Service & Timer direstart (jika tersedia)."
 }
 
 add_folder(){
@@ -498,6 +539,7 @@ edit_pg(){
 }
 
 list_backups(){
+    [[ -d "$INSTALL_DIR/backups" ]] || { echo "(tidak ada)"; return; }
     ls -1t "$INSTALL_DIR/backups" 2>/dev/null || echo "(tidak ada)"
 }
 
@@ -522,9 +564,13 @@ restore_backup(){
 
 rebuild_installer(){
     echo "[OK] Rebuilding installer files..."
-    systemctl daemon-reload
-    systemctl restart "$TIMER"
-    systemctl restart "$SERVICE"
+    # If installer exists in install dir, run it to rebuild locales (best effort)
+    if [[ -x "$INSTALL_DIR/install-backupvps-telegram.sh" ]]; then
+        bash "$INSTALL_DIR/install-backupvps-telegram.sh" || true
+    fi
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl restart "$TIMER" 2>/dev/null || true
+    systemctl restart "$SERVICE" 2>/dev/null || true
 }
 
 encrypt_last_backup(){
