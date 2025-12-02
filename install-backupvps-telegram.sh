@@ -410,57 +410,49 @@ next_epoch=$(date -d "$next_run" +%s 2>/dev/null || echo 0)
 if [[ -z "$last_epoch" ]]; then
     echo "Progress       : (tidak tersedia — last run tidak ditemukan)"
 else
+    total_interval=$(( next_epoch - last_epoch ))
+    elapsed=$(( now_epoch - last_epoch ))
 
-                    total_interval=$(( next_epoch - last_epoch ))
-                    elapsed=$(( now_epoch - last_epoch ))
-
-                    if (( total_interval <= 0 )); then
-                        percent=100
-                    else
-                        percent=$(( elapsed * 100 / total_interval ))
-                    fi
-
-                    (( percent > 100 )) && percent=100
-                    (( percent < 0 )) && percent=0
-
-                    bars=$(( percent / 5 ))
-                    bar=""
-                    for ((i=1;i<=bars;i++)); do bar+="█"; done
-                    while (( ${#bar} < 20 )); do bar+=" "; done
-
-                    echo -e "Progress       : ${BLUE}[${bar}]${RESET} $percent%"
-                fi
-            fi
-        else
-            echo "Time left      : (invalid date)"
-            echo "Progress       : (invalid date)"
-        fi
-    fi
-
-    # ----------------------------
-    # LAST BACKUP FILE
-    # ----------------------------
-    BACKUP_DIR="$INSTALL_DIR/backups"
-    lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1 || true)
-
-    if [[ -z "$lastfile" ]]; then
-        echo "Last backup    : (belum ada)"
+    if (( total_interval <= 0 )); then
+        percent=100
     else
-        lasttime=$(stat -c '%y' "$BACKUP_DIR/$lastfile" | cut -d'.' -f1)
-        echo -e "Last backup    : ${GREEN}$lastfile${RESET} ($lasttime)"
+        percent=$(( elapsed * 100 / total_interval ))
     fi
 
-    # ----------------------------
-    # SHOW LOG
-    # ----------------------------
-    echo ""
-    echo "--- Log auto-backup.service (5 baris terakhir) ---"
-    journalctl -u auto-backup.service -n 5 --no-pager || echo "(log tidak tersedia)"
+    (( percent > 100 )) && percent=100
+    (( percent < 0 )) && percent=0
 
-    echo ""
-    echo -e "\e[36m$WATERMARK_FOOTER\e[0m"
-    pause
+    bars=$(( percent / 5 ))
+    bar=""
+    for ((i=1;i<=bars;i++)); do bar+="█"; done
+    while (( ${#bar} < 20 )); do bar+=" "; done
+
+    echo -e "Progress       : ${BLUE}[${bar}]${RESET} $percent%"
+fi
+
+fi # penutup valid/invalid date
+# ----------------------------
+
+# LAST BACKUP FILE
+BACKUP_DIR="$INSTALL_DIR/backups"
+lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1 || true)
+
+if [[ -z "$lastfile" ]]; then
+    echo "Last backup    : (belum ada)"
+else
+    lasttime=$(stat -c '%y' "$BACKUP_DIR/$lastfile" | cut -d'.' -f1)
+    echo -e "Last backup    : ${GREEN}$lastfile${RESET} ($lasttime)"
+fi
+
+echo ""
+echo "--- Log auto-backup.service (5 baris terakhir) ---"
+journalctl -u auto-backup.service -n 5 --no-pager || echo "(log tidak tersedia)"
+
+echo ""
+echo -e "\e[36m$WATERMARK_FOOTER\e[0m"
+pause
 }
+
 
 
 # ---------- Folder / MySQL / PG functions ----------
