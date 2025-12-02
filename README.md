@@ -88,7 +88,7 @@ update-backup.sh
 Jalankan:
 
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/master/update-backup.sh)
+bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/menu-status-realtime/update-backup.sh)
 ```
 
 Menu yang tersedia:
