@@ -443,7 +443,6 @@ show_status() {
 
 
 
-
 # ---------- Folder / MySQL / PG functions ----------
 add_folder() {
     read -p "Masukkan folder baru (single path, atau comma separated): " NEW_FOLDER
