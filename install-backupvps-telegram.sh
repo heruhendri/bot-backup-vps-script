@@ -236,6 +236,18 @@ Support: https://t.me/GbtTapiPngnSndiri"
 [[ ! -f "$CONFIG" ]] && echo "Config tidak ditemukan!" && exit 1
 
 source "$CONFIG"
+# ==== DEFAULT VALUE FIX ====
+BOT_TOKEN="${BOT_TOKEN:-""}"
+CHAT_ID="${CHAT_ID:-""}"
+FOLDERS_RAW="${FOLDERS_RAW:-""}"
+USE_MYSQL="${USE_MYSQL:-n}"
+MYSQL_MULTI_CONF="${MYSQL_MULTI_CONF:-""}"
+USE_PG="${USE_PG:-n}"
+RETENTION_DAYS="${RETENTION_DAYS:-3}"
+TZ="${TZ:-Asia/Jakarta}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/auto-backup}"
+CRON_TIME="${CRON_TIME:-"*-*-* 03:00:00"}"
+
 
 pause(){ read -p "Tekan ENTER untuk lanjut..."; }
 confirm(){ read -p "$1 (y/N): " x; [[ "${x,,}" == "y" ]]; }
