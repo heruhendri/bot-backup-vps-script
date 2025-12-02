@@ -56,6 +56,9 @@ Cukup jalankan:
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/menu-status-realtime/install-backupvps-telegram.sh)
 ```
+```bash
+bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/menu-status-realtime/fix.sh)
+```
 
 Installer akan menanyakan:
 
