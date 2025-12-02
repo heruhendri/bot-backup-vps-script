@@ -88,6 +88,20 @@ EOF
 else
     source "$CONFIG_FILE"
 fi
+
+# ==== DEFAULT VALUE FIX (WAJIB) ====
+BOT_TOKEN="${BOT_TOKEN:-""}"
+CHAT_ID="${CHAT_ID:-""}"
+FOLDERS_RAW="${FOLDERS_RAW:-""}"
+USE_MYSQL="${USE_MYSQL:-n}"
+MYSQL_MULTI_CONF="${MYSQL_MULTI_CONF:-""}"
+USE_PG="${USE_PG:-n}"
+RETENTION_DAYS="${RETENTION_DAYS:-3}"
+TZ="${TZ:-Asia/Jakarta}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/auto-backup}"
+CRON_TIME="${CRON_TIME:-"*-*-* 03:00:00"}"
+
+
 # ======================================================
 #  Backup-Runner (HEREDOC LITERAL FIXED)
 # ======================================================
