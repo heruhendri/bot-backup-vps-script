@@ -810,7 +810,7 @@ while true; do
         16) encrypt_last_backup; pause ;;
         17) reload_systemd; pause ;;
         18) save_config; pause ;;
-        19) show_status; pause ;;
+        19) show_status ;;
         0) echo "Keluar tanpa menyimpan." ; break ;;
         *) echo "Pilihan tidak valid." ; sleep 1 ;;
     esac
