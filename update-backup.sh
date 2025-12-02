@@ -1,7 +1,8 @@
 #!/bin/bash
+set -euo pipefail
+
 # PRO Menu for Auto Backup VPS — TELEGRAM BOT
 # Location expected: /opt/auto-backup/menu.sh
-# Requires: bash, tar, timedatectl, systemctl, mysqldump (optional), pg_dumpall (optional), unzip (optional), zip (optional)
 
 CONFIG="/opt/auto-backup/config.conf"
 INSTALL_DIR="/opt/auto-backup"
@@ -10,16 +11,33 @@ SERVICE_FILE="/etc/systemd/system/auto-backup.service"
 TIMER_FILE="/etc/systemd/system/auto-backup.timer"
 LOGFILE="$INSTALL_DIR/menu-pro.log"
 
-# Ensure config exists
+WATERMARK_HEADER="=== AUTO BACKUP VPS — MENU PRO ===
+SCRIPT BY: HENDRI
+SUPPORT: https://t.me/GbtTapiPngnSndiri
+========================================"
+WATERMARK_FOOTER="========================================
+SCRIPT BY: HENDRI — AUTO BACKUP VPS
+Support: https://t.me/GbtTapiPngnSndiri"
+
 if [[ ! -f "$CONFIG" ]]; then
     echo "Config tidak ditemukan di $CONFIG. Jalankan installer terlebih dahulu." | tee -a "$LOGFILE"
     exit 1
 fi
 
-# load config (safe)
+# load config
+# shellcheck source=/dev/null
 source "$CONFIG"
+# Prevent unbound variable crash
+BOT_TOKEN="${BOT_TOKEN:-}"
+CHAT_ID="${CHAT_ID:-}"
+FOLDERS_RAW="${FOLDERS_RAW:-}"
+USE_MYSQL="${USE_MYSQL:-n}"
+MYSQL_MULTI_CONF="${MYSQL_MULTI_CONF:-}"
+USE_PG="${USE_PG:-n}"
+RETENTION_DAYS="${RETENTION_DAYS:-7}"
+TZ="${TZ:-Asia/Jakarta}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/auto-backup}"
 
-# helper: persist config to file
 save_config() {
     cat <<EOF > "$CONFIG"
 BOT_TOKEN="$BOT_TOKEN"
@@ -34,10 +52,10 @@ RETENTION_DAYS="$RETENTION_DAYS"
 TZ="$TZ"
 INSTALL_DIR="$INSTALL_DIR"
 EOF
+    chmod 600 "$CONFIG"
     echo "[$(date '+%F %T')] Config saved." >> "$LOGFILE"
 }
 
-# helper: restart systemd objects
 reload_systemd() {
     systemctl daemon-reload
     systemctl restart auto-backup.timer 2>/dev/null || true
@@ -45,13 +63,11 @@ reload_systemd() {
     echo "[$(date '+%F %T')] Systemd reloaded & services restarted." >> "$LOGFILE"
 }
 
-# UI helpers
 pause() {
     read -p "Tekan ENTER untuk lanjut..."
 }
 
 confirm() {
-    # confirm "Message"
     local msg="$1"
     read -p "$msg (y/N): " ans
     case "$ans" in
@@ -60,9 +76,161 @@ confirm() {
     esac
 }
 
-# ---------------------------
-# Folder management (existing)
-# ---------------------------
+# ---------- Status (static) ----------
+show_status() {
+    clear
+    echo "$WATERMARK_HEADER"
+    echo ""
+    echo "=== STATUS BACKUP — STATIC ==="
+    echo ""
+
+    svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo "unknown")
+    svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null || echo "unknown")
+    echo "Service status : $svc_active (enabled: $svc_enabled)"
+
+    tm_active=$(systemctl is-active auto-backup.timer 2>/dev/null || echo "unknown")
+    tm_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null || echo "unknown")
+    echo "Timer status   : $tm_active (enabled: $tm_enabled)"
+
+    next_run=$(systemctl list-timers --all 2>/dev/null | grep auto-backup.timer | awk '{print $1, $2, $3}' | head -n1)
+    [[ -z "$next_run" ]] && next_run="(tidak tersedia)"
+    echo "Next run       : $next_run"
+
+    BACKUP_DIR="$INSTALL_DIR/backups"
+    lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1 || true)
+    if [[ -n "$lastfile" ]]; then
+        lasttime=$(stat -c '%y' "$BACKUP_DIR/$lastfile" | cut -d'.' -f1)
+        echo "Last backup    : $lastfile ($lasttime)"
+    else
+        echo "Last backup    : (belum ada)"
+    fi
+
+    echo ""
+    echo "--- Log (5 baris terakhir) ---"
+    journalctl -u auto-backup.service -n 5 --no-pager || echo "(log tidak tersedia)"
+
+    echo ""
+    pause
+}
+
+# -------- Show Status Live (fixed auto-refresh) ----------
+show_status_live() {
+    # ensure terminal cleanup on exit
+    trap 'tput cnorm; stty sane; clear; echo "Keluar dari mode realtime."; return 0' SIGINT SIGTERM
+
+    # hide cursor
+    tput civis 2>/dev/null || true
+
+    while true; do
+        clear
+        echo -e "\e[36m$WATERMARK_HEADER\e[0m"
+        echo "        STATUS BACKUP — REALTIME (Refresh 1 detik)"
+        echo ""
+
+        GREEN="\e[32m"
+        BLUE="\e[34m"
+        RESET="\e[0m"
+
+        # Service status
+        svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo "unknown")
+        svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null || echo "unknown")
+        echo "Service status : $svc_active (enabled: $svc_enabled)"
+
+        # Timer status
+        tm_active=$(systemctl is-active auto-backup.timer 2>/dev/null || echo "unknown")
+        tm_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null || echo "unknown")
+        echo "Timer status   : $tm_active (enabled: $tm_enabled)"
+
+        # Next run (safe parse)
+        line=$(systemctl list-timers --all 2>/dev/null | grep auto-backup.timer | head -n1 || true)
+        if [[ -n "$line" ]]; then
+            nr1=$(echo "$line" | awk '{print $1}')
+            nr2=$(echo "$line" | awk '{print $2}')
+            nr3=$(echo "$line" | awk '{print $3}')
+            next_run="$nr1 $nr2 $nr3"
+        else
+            next_run="(tidak tersedia)"
+        fi
+        echo -e "Next run       : ${BLUE}$next_run${RESET}"
+
+        # Time left + progress
+        if [[ "$next_run" =~ ^\( ]]; then
+            echo "Time left      : (tidak tersedia)"
+            echo "Progress       : (tidak tersedia)"
+        else
+            # prevent date -d errors by checking non-empty
+            next_epoch=0
+            if ! next_epoch=$(date -d "$next_run" +%s 2>/dev/null); then
+                next_epoch=0
+            fi
+            now_epoch=$(date +%s)
+            diff=$(( next_epoch - now_epoch ))
+
+            if (( next_epoch == 0 || diff <= 0 )); then
+                echo "Time left      : 0 detik"
+                echo "Progress       : 100%"
+            else
+                d=$(( diff/86400 ))
+                h=$(( (diff%86400)/3600 ))
+                m=$(( (diff%3600)/60 ))
+                s=$(( diff%60 ))
+                echo "Time left      : $d hari $h jam $m menit $s detik"
+
+                # last run epoch (from journal)
+                last_epoch=$(journalctl -u auto-backup.service --output=short-unix -n 50 --no-pager \
+                    | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1 || true)
+
+                if [[ -z "$last_epoch" || "$last_epoch" -eq 0 ]]; then
+                    echo "Progress       : (tidak tersedia)"
+                else
+                    total_interval=$(( next_epoch - last_epoch ))
+                    elapsed=$(( now_epoch - last_epoch ))
+
+                    if (( total_interval <= 0 )); then
+                        percent=100
+                    else
+                        percent=$(( elapsed * 100 / total_interval ))
+                    fi
+
+                    ((percent < 0)) && percent=0
+                    ((percent > 100)) && percent=100
+
+                    bars=$(( percent / 5 ))
+                    bar=""
+                    for ((i=1;i<=bars;i++)); do bar+="█"; done
+                    while (( ${#bar} < 20 )); do bar+=" "; done
+
+                    echo -e "Progress       : ${BLUE}[${bar}]${RESET} $percent%"
+                fi
+            fi
+        fi
+
+        # Last backup file
+        BACKUP_DIR="$INSTALL_DIR/backups"
+        lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1 || true)
+        if [[ -z "$lastfile" ]]; then
+            echo "Last backup    : (belum ada)"
+        else
+            lasttime=$(stat -c '%y' "$BACKUP_DIR/$lastfile" | cut -d'.' -f1)
+            echo -e "Last backup    : ${GREEN}$lastfile${RESET} ($lasttime)"
+        fi
+
+        echo ""
+        echo "--- Log auto-backup.service (3 baris terakhir) ---"
+        # use --no-pager so it returns immediately
+        journalctl -u auto-backup.service -n 3 --no-pager 2>/dev/null || echo "(log tidak tersedia)"
+
+        echo ""
+        echo "[Tekan CTRL+C untuk keluar realtime]"
+        # sleep 1 with interruptability
+        sleep 1 || true
+    done
+
+    # restore cursor on exit (in case trap didn't run)
+    tput cnorm 2>/dev/null || true
+}
+
+# ---------- Folder / MySQL / PG functions ----------
 add_folder() {
     read -p "Masukkan folder baru (single path, atau comma separated): " NEW_FOLDER
     if [[ -z "$NEW_FOLDER" ]]; then
@@ -97,9 +265,6 @@ delete_folder() {
     echo "[OK] Folder dihapus."
 }
 
-# ---------------------------
-# MySQL advanced editor
-# ---------------------------
 list_mysql() {
     if [[ -z "$MYSQL_MULTI_CONF" ]]; then
         echo "(tidak ada konfigurasi MySQL)"
@@ -137,7 +302,6 @@ edit_mysql() {
     IDX=$((NUM-1))
     OLD="${LIST[$IDX]}"
     echo "Konfigurasi lama: $OLD"
-    # parse old
     OLD_USER=$(echo "$OLD" | cut -d':' -f1)
     OLD_PASS=$(echo "$OLD" | cut -d':' -f2 | cut -d'@' -f1)
     OLD_HOST=$(echo "$OLD" | cut -d'@' -f2 | cut -d':' -f1)
@@ -164,9 +328,6 @@ delete_mysql() {
     echo "[OK] Dihapus."
 }
 
-# ---------------------------
-# PostgreSQL editor & test
-# ---------------------------
 edit_pg() {
     read -p "Backup PostgreSQL? (y/n) [current: $USE_PG]: " x
     if [[ ! -z "$x" ]]; then USE_PG="$x"; fi
@@ -185,9 +346,6 @@ edit_pg() {
     fi
 }
 
-# ---------------------------
-# Restore backup
-# ---------------------------
 list_backups() {
     mkdir -p "$INSTALL_DIR/backups"
     ls -1tr "$INSTALL_DIR/backups" 2>/dev/null || echo "(tidak ada file backup)"
@@ -196,7 +354,6 @@ list_backups() {
 restore_backup() {
     echo "Daftar file backup (urut waktu):"
     files=()
-    idx=1
     while IFS= read -r -d $'\0' f; do
         files+=("$f")
     done < <(find "$INSTALL_DIR/backups" -maxdepth 1 -type f -print0 | sort -z)
@@ -212,7 +369,6 @@ restore_backup() {
         echo "Restore dibatalkan."
         return
     fi
-    # extract (safe mode: extract to temp then copy)
     TMPREST="$INSTALL_DIR/restore_tmp_$(date +%s)"
     mkdir -p "$TMPREST"
     tar -xzf "$SELECT" -C "$TMPREST"
@@ -227,18 +383,14 @@ restore_backup() {
     rm -rf "$TMPREST"
 }
 
-# ---------------------------
-# Recreate / Repair installer (rebuild service/timer/runner from config)
-# ---------------------------
 rebuild_installer_files() {
     echo "Membangun ulang service, timer, dan backup-runner berdasarkan config..."
-    # rebuild backup-runner if missing
     cat <<'EOR' > "$RUNNER"
 #!/bin/bash
 CONFIG_FILE="/opt/auto-backup/config.conf"
 source "$CONFIG_FILE"
 
-export TZ="$TZ"
+export TZ="${TZ:-UTC}"
 
 BACKUP_DIR="$INSTALL_DIR/backups"
 mkdir -p "$BACKUP_DIR"
@@ -249,15 +401,13 @@ TMP_DIR="$INSTALL_DIR/tmp-$DATE"
 
 mkdir -p "$TMP_DIR"
 
-# backup folders
 IFS=',' read -r -a FOLDERS <<< "$FOLDERS_RAW"
 for f in "${FOLDERS[@]}"; do
     if [ -d "$f" ]; then
-        cp -a "$f" "$TMP_DIR/"
+        cp -a "$f" "$TMP_DIR/" || true
     fi
 done
 
-# backup mysql
 if [[ "$USE_MYSQL" == "y" && ! -z "$MYSQL_MULTI_CONF" ]]; then
     mkdir -p "$TMP_DIR/mysql"
     IFS=';' read -r -a MYSQL_ITEMS <<< "$MYSQL_MULTI_CONF"
@@ -271,32 +421,30 @@ if [[ "$USE_MYSQL" == "y" && ! -z "$MYSQL_MULTI_CONF" ]]; then
         MYSQL_ARGS="-h$MYSQL_HOST -u$MYSQL_USER -p$MYSQL_PASS"
         if [[ "$MYSQL_DB_LIST" == "all" ]]; then
             OUTFILE="$TMP_DIR/mysql/${MYSQL_USER}@${MYSQL_HOST}_ALL.sql"
-            mysqldump $MYSQL_ARGS --all-databases > "$OUTFILE" 2>/dev/null
+            mysqldump $MYSQL_ARGS --all-databases > "$OUTFILE" 2>/dev/null || true
         else
             IFS=',' read -r -a DBARR <<< "$MYSQL_DB_LIST"
             for DB in "${DBARR[@]}"; do
                 OUTFILE="$TMP_DIR/mysql/${MYSQL_USER}@${MYSQL_HOST}_${DB}.sql"
-                mysqldump $MYSQL_ARGS "$DB" > "$OUTFILE" 2>/dev/null
+                mysqldump $MYSQL_ARGS "$DB" > "$OUTFILE" 2>/dev/null || true
             done
         fi
     done
 fi
 
-# backup postgres
 if [[ "$USE_PG" == "y" ]]; then
     mkdir -p "$TMP_DIR/postgres"
-    su - postgres -c "pg_dumpall > $TMP_DIR/postgres/all.sql"
+    su - postgres -c "pg_dumpall > $TMP_DIR/postgres/all.sql" || true
 fi
 
-tar -czf "$FILE" -C "$TMP_DIR" .
-curl -s -F document=@"$FILE" -F caption="Backup selesai: $(basename $FILE)" "https://api.telegram.org/bot$BOT_TOKEN/sendDocument?chat_id=$CHAT_ID"
+tar -czf "$FILE" -C "$TMP_DIR" . || true
+curl -s -F document=@"$FILE" -F caption="Backup selesai: $(basename $FILE)" "https://api.telegram.org/bot$BOT_TOKEN/sendDocument?chat_id=$CHAT_ID" || true
 rm -rf "$TMP_DIR"
-find "$BACKUP_DIR" -type f -mtime +$RETENTION_DAYS -delete
+find "$BACKUP_DIR" -type f -mtime +$RETENTION_DAYS -delete || true
 EOR
     chmod +x "$RUNNER"
     echo "[OK] Backup runner dibuat/diupdate: $RUNNER"
 
-    # rebuild service
     cat <<EOT > "$SERVICE_FILE"
 [Unit]
 Description=Auto Backup VPS to Telegram
@@ -312,10 +460,8 @@ User=root
 WantedBy=multi-user.target
 EOT
 
-    # rebuild timer (try to preserve OnCalendar from existing if any)
     CURRENT_ONCAL="*-*-* 03:00:00"
     if [[ -f "$TIMER_FILE" ]]; then
-        # try to extract OnCalendar line
         oc=$(grep -E '^OnCalendar=' "$TIMER_FILE" 2>/dev/null | head -n1 | cut -d'=' -f2-)
         if [[ ! -z "$oc" ]]; then CURRENT_ONCAL="$oc"; fi
     fi
@@ -332,23 +478,19 @@ Persistent=true
 WantedBy=timers.target
 EOT
 
-    systemctl daemon-reload
-    systemctl enable --now auto-backup.timer
-    systemctl enable auto-backup.service
+    systemctl daemon-reload || true
+    systemctl enable --now auto-backup.timer || true
+    systemctl enable auto-backup.service || true
     echo "[OK] Service & timer dibuat / direpair."
     echo "[$(date '+%F %T')] Rebuilt installer files." >> "$LOGFILE"
 }
 
-# ---------------------------
-# Backup encryption (zip + password)
-# ---------------------------
 encrypt_last_backup() {
     mkdir -p "$INSTALL_DIR/backups"
     LAST=$(ls -1t "$INSTALL_DIR/backups" 2>/dev/null | head -n1)
     if [[ -z "$LAST" ]]; then echo "Tidak ada backup untuk diencrypt."; return; fi
     read -s -p "Masukkan password enkripsi (akan digunakan untuk zip): " PWD; echo ""
     OUT="$INSTALL_DIR/backups/${LAST%.*}.zip"
-    # zip with password (zip -P)
     if command -v zip >/dev/null 2>&1; then
         zip -P "$PWD" "$OUT" "$INSTALL_DIR/backups/$LAST" >/dev/null 2>&1
         echo "Encrypted archive dibuat: $OUT"
@@ -357,9 +499,6 @@ encrypt_last_backup() {
     fi
 }
 
-# ---------------------------
-# OnCalendar helper (interactive)
-# ---------------------------
 build_oncalendar() {
     echo "Bentuk OnCalendar bisa: '*-*-* HH:MM:SS' (setiap hari jam tertentu)"
     echo "Contoh weekly/monthly: 'Mon *-*-* 03:00:00' dsb."
@@ -371,9 +510,6 @@ build_oncalendar() {
     echo "[OK] OnCalendar disimpan ke $TIMER_FILE"
 }
 
-# ---------------------------
-# Show config & quick actions
-# ---------------------------
 show_config_file() {
     echo "================ CONFIG FILE ================"
     cat "$CONFIG"
@@ -386,11 +522,11 @@ test_backup() {
     echo "Selesai. Periksa Telegram / $INSTALL_DIR/backups"
 }
 
-# ---------------------------
 # Main menu
-# ---------------------------
 while true; do
     clear
+    echo "$WATERMARK_HEADER"
+    echo ""
     echo "=============================================="
     echo "   AUTO BACKUP — MENU PRO (Telegram VPS)"
     echo "=============================================="
@@ -412,6 +548,8 @@ while true; do
     echo "16) Encrypt latest backup (zip with password)"
     echo "17) Restart service & timer"
     echo "18) Simpan config"
+    echo "19) Status (service / last backup / next run)"
+    echo "20) Status Realtime (live monitor)"
     echo "0) Keluar (tanpa simpan)"
     echo "----------------------------------------------"
     read -p "Pilih menu: " opt
@@ -435,6 +573,8 @@ while true; do
         16) encrypt_last_backup; pause ;;
         17) reload_systemd; pause ;;
         18) save_config; pause ;;
+        19) show_status ;;
+        20) show_status_live ;;
         0) echo "Keluar tanpa menyimpan." ; break ;;
         *) echo "Pilihan tidak valid." ; sleep 1 ;;
     esac

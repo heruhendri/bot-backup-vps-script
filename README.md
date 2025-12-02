@@ -1,117 +1,158 @@
 
-
 # 📦 **bot-backup-vps-script**
 
 ![License](https://img.shields.io/github/license/heruhendri/bot-backup-vps-script)
 ![Stars](https://img.shields.io/github/stars/heruhendri/bot-backup-vps-script?style=social)
 ![Forks](https://img.shields.io/github/forks/heruhendri/bot-backup-vps-script?style=social)
 ![Issues](https://img.shields.io/github/issues/heruhendri/bot-backup-vps-script)
-![Version](https://img.shields.io/badge/version-2.0.0-blue)
+![Version](https://img.shields.io/badge/version-3.0.0-blue)
 
 ---
 
-# 🛡 **Bot Backup VPS — Telegram Notifier**
+# 🛡 **Bot Backup VPS — Telegram Auto Backup (Installer + Menu PRO)**
 
-Backup otomatis **folder + database** ke **Telegram**, berjalan sebagai **systemd service**, dan memiliki fitur **update konfigurasi** menggunakan menu interaktif.
+Script ini membuat sistem **backup otomatis VPS** dengan fitur lengkap:
+
+* Backup folder
+* Backup MySQL (multi-host, multi-user, multi-database)
+* Backup PostgreSQL
+* Notifikasi Telegram (sendDocument)
+* systemd service + timer (OnCalendar)
+* Menu PRO untuk edit konfigurasi
+* Status real-time (auto refresh setiap 1 detik)
+* Restore backup → langsung ke root `/`
+* Rebuild sistem service/timer/runner
+* Encrypt backup (ZIP + password)
+* Auto delete file lama (retention)
 
 ---
 
-# ✨ **Fitur Utama**
+# ✨ **FITUR UTAMA**
 
-### 🔥 Backup Lengkap
+### 🔥 Backup Lengkap dan Fleksibel
 
-* Multi-folder (banyak path sekaligus)
-* MySQL (multi-database atau ALL)
-* PostgreSQL (pg_dumpall)
+* Backup banyak folder sekaligus (comma separated)
+* MySQL multi config:
+
+  * multi user
+  * multi host
+  * database ALL atau list DB
+  * format: `user:pass@host:db1,db2`
+* PostgreSQL full backup (`pg_dumpall`)
 
 ### 🔔 Notifikasi Telegram
 
-* File backup terkirim langsung
-* Status sukses / gagal
+* Backup dikirim ke Telegram sebagai file
+* Caption otomatis
 
-### ⚙️ Otomatis & Stabil
+### ⚙️ Otomatis dan Stabil
 
-* systemd service + timer
-* Cron schedule menggunakan `OnCalendar`
-* Timezone dapat disesuaikan
-* Retention auto-clean (hapus backup lama)
+* Menggunakan systemd service + timer
+* Jadwal memakai format OnCalendar
+* Timezone di-set otomatis saat instalasi
 
-### 🛠 Konfigurasi Lengkap
+### 🛠 Menu PRO
 
-* Installer otomatis (curl)
-* Menu **edit**, **hapus**, **tambah backup baru** tanpa menghapus config lama
-* Update script tanpa install ulang
+Script menyediakan menu canggih:
+
+```
+menu-bot-backup
+```
+
+Di dalamnya ada:
+
+* Edit BOT TOKEN / CHAT ID
+* Tambah / hapus folder
+* Tambah / edit / hapus MySQL config
+* Edit PostgreSQL + test dump
+* Edit timezone
+* Edit retention
+* Edit jadwal OnCalendar
+* Test backup langsung
+* Restore dari backup
+* Encrypt latest backup
+* Rebuild service / timer / runner
+* Status statis
+* Status realtime (refresh per detik)
+* Save config
+* Restart service & timer
 
 ### 🔒 Keamanan
 
-* Password database tidak ditampilkan
-* Folder konfigurasi di `/opt/auto-backup` aman
+* Config disimpan di `/opt/auto-backup/config.conf`
+* Permission otomatis `chmod 600`
+* Password tidak ditampilkan saat input
 
 ---
 
 # 🚀 **INSTALASI CEPAT**
 
-Cukup jalankan:
+Jalankan installer:
 
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/master/install-backupvps-telegram.sh)
+bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/main/install-backupvps-telegram.sh)
+```
+
+Atau versi branch (menu realtime):
+
+```bash
+bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/menu-status-realtime/install-backupvps-telegram.sh)
 ```
 
 Installer akan menanyakan:
 
-* Token bot Telegram
+* Bot token
 * Chat ID
-* Folder yang ingin dibackup
-* Backup MySQL? (optional)
-* Backup PostgreSQL? (optional)
-* Daftar database MySQL (all / comma separated)
-* Retention days
+* Folder backup
+* MySQL? (y/n)
+* PostgreSQL? (y/n)
+* Multi konfigurasi MySQL
+* Retention (hari)
 * Timezone
-* Jadwal backup (systemd timer format)
+* Jadwal systemd timer (OnCalendar)
 
 Setelah selesai:
 
-* Service dibuat → `auto-backup.service`
-* Timer dibuat → `auto-backup.timer`
-* Installer otomatis menghapus dirinya
+✔ Service dibuat — `auto-backup.service`
+✔ Timer aktif — `auto-backup.timer`
+✔ Backup pertama langsung berjalan
+✔ Installer menghapus dirinya sendiri
 
 ---
 
-# 🛠 **UPDATE KONFIGURASI (Tambah / Edit / Hapus)**
+# 🛠 **UPDATE KONFIGURASI (MENU PRO)**
 
-Update dilakukan melalui script:
-
-```
-update-backup.sh
-```
-
-Jalankan:
+Akses menu:
 
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/master/update-backup.sh)
+menu-bot-backup
 ```
 
-Menu yang tersedia:
+Menu lengkap:
 
 ```
-1. Tambah folder backup
-2. Hapus folder backup
-3. Tambah database MySQL
-4. Hapus database MySQL
-5. Ubah jadwal backup
-6. Ubah retention
-7. Ubah timezone
-8. Tampilkan konfigurasi
-9. Keluar
+1) Lihat konfigurasi
+2) Edit BOT TOKEN
+3) Edit CHAT ID
+4) Tambah folder backup
+5) Hapus folder backup
+6) Tambah konfigurasi MySQL
+7) Edit konfigurasi MySQL
+8) Hapus konfigurasi MySQL
+9) Edit PostgreSQL settings + test dump
+10) Ubah timezone
+11) Ubah retention days
+12) Ubah jadwal OnCalendar
+13) Test backup sekarang
+14) Restore dari backup
+15) Rebuild installer files
+16) Encrypt latest backup
+17) Restart service & timer
+18) Save config
+19) Status statis
+20) Status realtime
+0) Keluar
 ```
-
-### Semua update otomatis:
-
-* ✔ Mengubah config file
-* ✔ Reload systemd
-* ✔ Timer restart
-
-Tidak perlu install ulang dan konfigurasi tidak hilang.
 
 ---
 
@@ -119,120 +160,164 @@ Tidak perlu install ulang dan konfigurasi tidak hilang.
 
 ```mermaid
 flowchart TD
-    A[VPS Server] -->|Folder Backup| B[Backup Runner]
-    A -->|MySQL Dump| B
-    A -->|PostgreSQL Dump| B
+    A[VPS Server] --> B[Backup Runner]
+    A --> C[MySQL Dump]
+    A --> D[PostgreSQL Dump]
 
-    B -->|Compress .tar.gz| C[Backup Storage: /opt/auto-backup/backups]
-    B -->|Send File + Status| D[Telegram Bot API]
+    B --> E[Create Archive]
+    E --> F[Backup Folder]
 
-    C -->|"Auto Clean / Retention"| B
+    F --> G[Send to Telegram]
 
-    E[Systemd Timer] -->|OnCalendar| B
-    F[Systemd Service] --> B
-    G[Update Script] -->|Modify config.conf| B
+    H[Systemd Timer] --> B
+    I[Systemd Service] --> B
+
+    J[Menu PRO] --> K[Edit config.conf]
+    J --> L[Rebuild System]
+
+    K --> B
+    L --> B
+
 ```
+---
+# 🚲 **ALUR BACKUP SYSTEM**
 
-Penjelasan:
+```mermaid
+flowchart TD
+    Start([Start]) --> Load[Load Config]
 
-* Semua pekerjaan backup diproses oleh `backup-runner.sh`
-* Service & Timer memastikan backup berjalan otomatis
-* Telegram menerima file + laporan
-* Update konfigurasi tidak menghapus setup lama
+    Load --> Tmp[Create Temp Dir]
 
+    Tmp --> Copy[Copy Folders]
+    Copy --> MySQL{Use MySQL?}
+
+    MySQL -->|Yes| DumpMySQL[Dump MySQL]
+    MySQL -->|No| SkipMySQL[Skip]
+
+    DumpMySQL --> PG{Use PostgreSQL?}
+    SkipMySQL --> PG
+
+    PG -->|Yes| DumpPG[Dump PostgreSQL]
+    PG -->|No| SkipPG[Skip]
+
+    DumpPG --> Tar[Create TAR.GZ]
+    SkipPG --> Tar
+
+    Tar --> Send{Send to Telegram?}
+
+    Send -->|Yes| Upload[Upload File]
+    Send -->|No| SkipSend[Skip]
+
+    Upload --> Clean[Cleanup Temp]
+    SkipSend --> Clean
+
+    Clean --> Retention[Delete Old Backups]
+
+    Retention --> End([Done])
+
+
+```
 ---
 
 # 📂 **STRUKTUR DIREKTORI**
 
-| File / Folder                             | Deskripsi               |
-| ----------------------------------------- | ----------------------- |
-| `/opt/auto-backup/config.conf`            | Konfigurasi utama       |
-| `/opt/auto-backup/backup-runner.sh`       | Core backup script      |
-| `/opt/auto-backup/backups/`               | Folder hasil backup     |
-| `/etc/systemd/system/auto-backup.service` | Service backup          |
-| `/etc/systemd/system/auto-backup.timer`   | Scheduler backup        |
-| `install-backupvps-telegram.sh`           | Installer               |
-| `update-backup.sh`                        | Script edit konfigurasi |
+| Path                                      | Deskripsi                               |
+| ----------------------------------------- | --------------------------------------- |
+| `/opt/auto-backup/config.conf`            | File konfigurasi utama                  |
+| `/opt/auto-backup/backup-runner.sh`       | Script inti backup                      |
+| `/opt/auto-backup/menu.sh`                | Menu PRO                                |
+| `/usr/bin/menu-bot-backup`                | Symlink global ke menu                  |
+| `/opt/auto-backup/backups/`               | Folder hasil backup                     |
+| `/etc/systemd/system/auto-backup.service` | Service backup                          |
+| `/etc/systemd/system/auto-backup.timer`   | Timer OnCalendar                        |
+| `install-backupvps-telegram.sh`           | Installer (auto delete setelah selesai) |
 
 ---
 
 # 📝 **PENJELASAN SCRIPT UTAMA**
 
----
-
-## 1️⃣ **installer — install-backupvps-telegram.sh**
-
-Installer melakukan:
-
-1. Mengambil input dari user
-2. Membuat folder `/opt/auto-backup`
-3. Membuat `config.conf`
-4. Membuat `backup-runner.sh`
-5. Membuat systemd service + timer
-6. Test backup pertama
-7. Menghapus file installer
-
-Setelah instalasi:
-
-* ✔ Tidak perlu jalankan ulang installer
-* ✔ Seluruh konfigurasi tersimpan
-
----
-
-## 2️⃣ **update-backup.sh — menu konfigurasi**
-
-Memiliki fitur:
-
-* Add folder
-* Remove folder
-* Add MySQL DB
-* Remove MySQL DB
-* Update Cron schedule
-* Update retention
-* Update timezone
-* View config
-
-Aman karena:
-
-✔ Tidak menimpa konfigurasi lama
-✔ Hanya mengubah bagian tertentu
-✔ Reload systemd otomatis
-
----
-
-## 3️⃣ **backup-runner.sh — inti backup**
+## 1️⃣ **Installer (`install-backupvps-telegram.sh`)**
 
 Fungsi:
 
-* Backup folder
-* Dump MySQL (per DB / all)
-* Dump PostgreSQL
-* Compress → tar.gz
-* Upload ke Telegram
-* Cleanup file sementara
-* Retention auto delete
+* Input seluruh parameter backup
+* Buat folder installer
+* Buat config
+* Buat backup-runner
+* Buat systemd service
+* Buat systemd timer
+* Install menu PRO
+* Jalankan backup pertama
+* Hapus installer otomatis
 
----
+## 2️⃣ **Menu PRO (`menu.sh`)**
 
-# 📌 **RETENTION AUTO CLEAN**
+Fungsi besar:
 
-Backup lama dibersihkan:
+### 👍 Management Backup Folder
 
-```bash
-find "$BACKUP_DIR" -type f -mtime +$RETENTION_DAYS -delete
-```
+* tambah
+* hapus
+
+### 👍 Management MySQL
+
+* multi konfigurasi
+* edit & delete
+* format:
+  `user:password@host:DB1,DB2`
+  atau `all`
+
+### 👍 PostgreSQL
+
+* enable/disable
+* test dump otomatis
+
+### 👍 Management Sistem
+
+* timezone
+* retention
+* jadwal OnCalendar
+
+### 👍 Rebuild System
+
+* perbaiki runner
+* rebuild service
+* rebuild timer
+
+### 👍 Backup & Restore
+
+* test backup
+* restore ke `/`
+* preview isi archive
+
+### 👍 Status
+
+* status biasa
+* status realtime (auto refresh 1 detik)
+
+## 3️⃣ **Backup Runner (`backup-runner.sh`)**
+
+Melakukan:
+
+* backup folder
+* backup mysql multi config
+* backup postgres
+* compress tar.gz
+* kirim ke Telegram
+* delete tempo
+* delete file lama sesuai retention
 
 ---
 
 # 🧪 **TEST SERVICE**
 
-Cek status:
+Cek service:
 
 ```
 systemctl status auto-backup
 ```
 
-Manual jalankan:
+Jalankan manual:
 
 ```
 systemctl start auto-backup
@@ -246,10 +331,55 @@ systemctl list-timers | grep auto-backup
 
 ---
 
+# 🧹 **RETENTION AUTO CLEAN**
+
+Backup lama dibersihkan otomatis menggunakan:
+
+```
+find /opt/auto-backup/backups -type f -mtime +RETENTION_DAYS -delete
+```
+
+---
+
+# 🔐 **ENCRYPT BACKUP (ZIP + PASSWORD)**
+
+Menu PRO menyediakan:
+
+```
+Encrypt latest backup
+```
+
+Menghasilkan file:
+
+```
+backup-xxx.zip
+```
+
+---
+
+# 🩹 **RESTORE BACKUP**
+
+Menu PRO:
+
+```
+Restore dari backup
+```
+
+Fitur:
+
+* pilih file
+* preview isi (30 baris)
+* extract ke temp
+* rsync ke root (`/`)
+* konfirmasi dua kali
+
+---
+
 # 🙌 **KONTRIBUSI**
 
-Pull request & issue sangat welcome!
+Pull Request dan Issue sangat diterima.
 
+Repo:
 👉 [https://github.com/heruhendri/bot-backup-vps-script](https://github.com/heruhendri/bot-backup-vps-script)
 
 ---
@@ -257,6 +387,4 @@ Pull request & issue sangat welcome!
 # 📜 **LISENSI**
 
 MIT License.
-
----
 
