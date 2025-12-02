@@ -373,8 +373,14 @@ show_status() {
 
 
 
-# -------- Show Status Live ----------
+# -------- Show Status Live (fixed auto-refresh) ----------
 show_status_live() {
+    # ensure terminal cleanup on exit
+    trap 'tput cnorm; stty sane; clear; echo "Keluar dari mode realtime."; return 0' SIGINT SIGTERM
+
+    # hide cursor
+    tput civis 2>/dev/null || true
+
     while true; do
         clear
         echo -e "\e[36m$WATERMARK_HEADER\e[0m"
@@ -395,7 +401,7 @@ show_status_live() {
         tm_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null || echo "unknown")
         echo "Timer status   : $tm_active (enabled: $tm_enabled)"
 
-        # Next run
+        # Next run (safe parse)
         line=$(systemctl list-timers --all 2>/dev/null | grep auto-backup.timer | head -n1 || true)
         if [[ -n "$line" ]]; then
             nr1=$(echo "$line" | awk '{print $1}')
@@ -412,11 +418,15 @@ show_status_live() {
             echo "Time left      : (tidak tersedia)"
             echo "Progress       : (tidak tersedia)"
         else
-            next_epoch=$(date -d "$next_run" +%s 2>/dev/null || echo 0)
+            # prevent date -d errors by checking non-empty
+            next_epoch=0
+            if ! next_epoch=$(date -d "$next_run" +%s 2>/dev/null); then
+                next_epoch=0
+            fi
             now_epoch=$(date +%s)
             diff=$(( next_epoch - now_epoch ))
 
-            if (( diff <= 0 )); then
+            if (( next_epoch == 0 || diff <= 0 )); then
                 echo "Time left      : 0 detik"
                 echo "Progress       : 100%"
             else
@@ -424,19 +434,23 @@ show_status_live() {
                 h=$(( (diff%86400)/3600 ))
                 m=$(( (diff%3600)/60 ))
                 s=$(( diff%60 ))
-
                 echo "Time left      : $d hari $h jam $m menit $s detik"
 
-                # last run epoch
-                last_epoch=$(journalctl -u auto-backup.service --output=short-unix -n 50 \
-                    | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1)
+                # last run epoch (from journal)
+                last_epoch=$(journalctl -u auto-backup.service --output=short-unix -n 50 --no-pager \
+                    | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1 || true)
 
-                if [[ -z "$last_epoch" ]]; then
+                if [[ -z "$last_epoch" || "$last_epoch" -eq 0 ]]; then
                     echo "Progress       : (tidak tersedia)"
                 else
                     total_interval=$(( next_epoch - last_epoch ))
                     elapsed=$(( now_epoch - last_epoch ))
-                    percent=$(( elapsed * 100 / total_interval ))
+
+                    if (( total_interval <= 0 )); then
+                        percent=100
+                    else
+                        percent=$(( elapsed * 100 / total_interval ))
+                    fi
 
                     ((percent < 0)) && percent=0
                     ((percent > 100)) && percent=100
@@ -451,10 +465,9 @@ show_status_live() {
             fi
         fi
 
-        # Last backup
+        # Last backup file
         BACKUP_DIR="$INSTALL_DIR/backups"
         lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1 || true)
-
         if [[ -z "$lastfile" ]]; then
             echo "Last backup    : (belum ada)"
         else
@@ -464,12 +477,17 @@ show_status_live() {
 
         echo ""
         echo "--- Log auto-backup.service (3 baris terakhir) ---"
-        journalctl -u auto-backup.service -n 3 --no-pager 2>/dev/null || true
+        # use --no-pager so it returns immediately
+        journalctl -u auto-backup.service -n 3 --no-pager 2>/dev/null || echo "(log tidak tersedia)"
 
         echo ""
         echo "[Tekan CTRL+C untuk keluar realtime]"
-        sleep 1
+        # sleep 1 with interruptability
+        sleep 1 || true
     done
+
+    # restore cursor on exit (in case trap didn't run)
+    tput cnorm 2>/dev/null || true
 }
 
 
