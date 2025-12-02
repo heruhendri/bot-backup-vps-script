@@ -250,14 +250,11 @@ systemctl enable --now auto-backup.timer || true
 echo "[OK] systemd service & timer configured."
 
 # ======================================================
-# INSTALL MENU (Fixed Realtime Exit)
+# INSTALL MENU (Fixed Htop-style Refresh)
 # ======================================================
 cat > "$MENU_FILE" <<'MENU'
 #!/bin/bash
 set -euo pipefail
-
-# PRO Menu for Auto Backup VPS — TELEGRAM BOT
-# Location expected: /opt/auto-backup/menu.sh
 
 CONFIG="/opt/auto-backup/config.conf"
 INSTALL_DIR="/opt/auto-backup"
@@ -276,9 +273,7 @@ if [[ ! -f "$CONFIG" ]]; then
     exit 1
 fi
 
-# load config
 source "$CONFIG"
-# Prevent unbound variable crash
 BOT_TOKEN="${BOT_TOKEN:-}"
 CHAT_ID="${CHAT_ID:-}"
 FOLDERS_RAW="${FOLDERS_RAW:-}"
@@ -327,26 +322,21 @@ confirm() {
     esac
 }
 
-# ---------- Status (static) ----------
 show_status() {
     clear
     echo "$WATERMARK_HEADER"
     echo ""
     echo "=== STATUS BACKUP — STATIC ==="
     echo ""
-
     svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo "unknown")
     svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null || echo "unknown")
     echo "Service status : $svc_active (enabled: $svc_enabled)"
-
     tm_active=$(systemctl is-active auto-backup.timer 2>/dev/null || echo "unknown")
     tm_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null || echo "unknown")
     echo "Timer status   : $tm_active (enabled: $tm_enabled)"
-
     next_run=$(systemctl list-timers --all 2>/dev/null | grep auto-backup.timer | awk '{print $1, $2, $3}' | head -n1)
     [[ -z "$next_run" ]] && next_run="(tidak tersedia)"
     echo "Next run       : $next_run"
-
     BACKUP_DIR="$INSTALL_DIR/backups"
     lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1 || true)
     if [[ -n "$lastfile" ]]; then
@@ -355,39 +345,41 @@ show_status() {
     else
         echo "Last backup    : (belum ada)"
     fi
-
     echo ""
     echo "--- Log (5 baris terakhir) ---"
     journalctl -u auto-backup.service -n 5 --no-pager || echo "(log tidak tersedia)"
-
     echo ""
     pause
 }
 
-# -------- Show Status Live (SAFE EXIT VERSION) ----------
+# -------- Show Status Live (HTOP STYLE) ----------
 show_status_live() {
-    # Hide cursor
+    # 1. Hide cursor for smoother look
     tput civis 2>/dev/null || true
+
+    # 2. FLUSH INPUT BUFFER
+    # This prevents the "Enter" key used to select the menu from
+    # triggering the exit condition immediately.
+    read -t 0.1 -n 10000 discard 2>/dev/null || true
 
     while true; do
         clear
         echo -e "\e[36m$WATERMARK_HEADER\e[0m"
-        echo "        STATUS BACKUP — REALTIME (1s Refresh)"
+        echo "        STATUS BACKUP — REALTIME"
+        echo "        (Auto-refresh 1 detik)"
         echo ""
 
         GREEN="\e[32m"
         BLUE="\e[34m"
         RESET="\e[0m"
 
-        # Service status
+        # --- Data Gathering ---
         svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo "unknown")
-        echo "Service status : $svc_active"
-
-        # Timer status
         tm_active=$(systemctl is-active auto-backup.timer 2>/dev/null || echo "unknown")
+        
+        echo "Service status : $svc_active"
         echo "Timer status   : $tm_active"
 
-        # Next run
         line=$(systemctl list-timers --all 2>/dev/null | grep auto-backup.timer | head -n1 || true)
         if [[ -n "$line" ]]; then
             nr1=$(echo "$line" | awk '{print $1}')
@@ -399,7 +391,6 @@ show_status_live() {
         fi
         echo -e "Next run       : ${BLUE}$next_run${RESET}"
 
-        # Time left + progress calculation
         if [[ "$next_run" =~ ^\( ]]; then
             echo "Time left      : -"
         else
@@ -415,8 +406,8 @@ show_status_live() {
                 m=$(( (diff%3600)/60 ))
                 s=$(( diff%60 ))
                 echo "Time left      : $d hari $h jam $m menit $s detik"
-
-                # Progress Bar
+                
+                # Progress Bar Logic
                 last_epoch=$(journalctl -u auto-backup.service --output=short-unix -n 50 \
                     | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1)
                 
@@ -436,7 +427,6 @@ show_status_live() {
             fi
         fi
 
-        # Last backup
         BACKUP_DIR="$INSTALL_DIR/backups"
         lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1 || true)
         if [[ -n "$lastfile" ]]; then
@@ -451,22 +441,26 @@ show_status_live() {
         journalctl -u auto-backup.service -n 3 --no-pager 2>/dev/null || true
 
         echo ""
-        echo -e "\e[33mTekan [ENTER] atau 'q' untuk kembali ke menu...\e[0m"
+        echo -e "\e[33m[ Tekan ENTER untuk kembali ke Menu Utama ]\e[0m"
 
-        # REPLACEMENT FOR SLEEP:
-        # Wait 1 second for input. If input received, break loop.
-        read -t 1 -n 1 -s key || true
-        # If exit code is 0 (key pressed), break
+        # --- The Logic: Wait 1 sec OR break on input ---
+        # -t 1 : wait 1 second
+        # -n 1 : read 1 character
+        # -s   : silent
+        # -r   : raw
+        # If user presses key, exit code is 0 -> break
+        # If timeout, exit code > 128 -> continue loop
+        read -t 1 -n 1 -s -r key 2>/dev/null || true
         if [[ $? -eq 0 ]]; then
             break
         fi
+
     done
     
     # Restore cursor
     tput cnorm 2>/dev/null || true
 }
 
-# ---------- Folder / MySQL / PG functions ----------
 add_folder() {
     read -p "Masukkan folder baru (single path, atau comma separated): " NEW_FOLDER
     if [[ -z "$NEW_FOLDER" ]]; then
@@ -603,7 +597,6 @@ restore_backup() {
 
 rebuild_installer_files() {
     echo "Membangun ulang service, timer, dan backup-runner berdasarkan config..."
-    # Recreate Runner
     cat <<EOR > "$RUNNER"
 #!/bin/bash
 CONFIG_FILE="/opt/auto-backup/config.conf"
@@ -653,7 +646,6 @@ find "\$BACKUP_DIR" -type f -mtime +\$RETENTION_DAYS -delete || true
 EOR
     chmod +x "$RUNNER"
     
-    # Recreate Service
     cat <<EOT > "$SERVICE_FILE"
 [Unit]
 Description=Auto Backup VPS to Telegram
@@ -667,7 +659,6 @@ User=root
 WantedBy=multi-user.target
 EOT
 
-    # Recreate Timer (preserve existing OnCalendar if possible)
     CURRENT_ONCAL="*-*-* 03:00:00"
     if [[ -f "$TIMER_FILE" ]]; then
         oc=$(grep -E '^OnCalendar=' "$TIMER_FILE" 2>/dev/null | head -n1 | cut -d'=' -f2-)
