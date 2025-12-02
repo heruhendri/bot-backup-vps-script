@@ -781,7 +781,7 @@ while true; do
     echo "17) Restart service & timer"
     echo "18) Simpan config"
     echo "19) Status (service / last backup / next run)"
-    echo "20) Status Realtime (live monitor)
+    echo "20) Status Realtime (live monitor)"
     echo "0) Keluar (tanpa simpan)"
     echo "----------------------------------------------"
     read -p "Pilih menu: " opt
