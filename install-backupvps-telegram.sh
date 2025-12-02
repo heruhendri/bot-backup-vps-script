@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -uo pipefail
 clear
 
 WATERMARK_INSTALL="=== AUTO BACKUP VPS — INSTALLER ===
@@ -378,33 +378,33 @@ show_status_live() {
     while true; do
         clear
         echo -e "\e[36m$WATERMARK_HEADER\e[0m"
-        echo "          STATUS BACKUP — REALTIME (Refresh 1 detik)"
+        echo "        STATUS BACKUP — REALTIME (Refresh 1 detik)"
         echo ""
 
         GREEN="\e[32m"
         BLUE="\e[34m"
         RESET="\e[0m"
 
-        # Service
+        # Service status
         svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo "unknown")
         svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null || echo "unknown")
         echo "Service status : $svc_active (enabled: $svc_enabled)"
 
-        # Timer
+        # Timer status
         tm_active=$(systemctl is-active auto-backup.timer 2>/dev/null || echo "unknown")
         tm_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null || echo "unknown")
         echo "Timer status   : $tm_active (enabled: $tm_enabled)"
 
         # Next run
-        next_run=""
         line=$(systemctl list-timers --all 2>/dev/null | grep auto-backup.timer | head -n1 || true)
         if [[ -n "$line" ]]; then
             nr1=$(echo "$line" | awk '{print $1}')
             nr2=$(echo "$line" | awk '{print $2}')
             nr3=$(echo "$line" | awk '{print $3}')
             next_run="$nr1 $nr2 $nr3"
+        else
+            next_run="(tidak tersedia)"
         fi
-        [[ -z "$next_run" ]] && next_run="(tidak tersedia)"
         echo -e "Next run       : ${BLUE}$next_run${RESET}"
 
         # Time left + progress
@@ -414,7 +414,6 @@ show_status_live() {
         else
             next_epoch=$(date -d "$next_run" +%s 2>/dev/null || echo 0)
             now_epoch=$(date +%s)
-
             diff=$(( next_epoch - now_epoch ))
 
             if (( diff <= 0 )); then
@@ -425,9 +424,10 @@ show_status_live() {
                 h=$(( (diff%86400)/3600 ))
                 m=$(( (diff%3600)/60 ))
                 s=$(( diff%60 ))
+
                 echo "Time left      : $d hari $h jam $m menit $s detik"
 
-                # last run detection
+                # last run epoch
                 last_epoch=$(journalctl -u auto-backup.service --output=short-unix -n 50 \
                     | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1)
 
@@ -451,9 +451,10 @@ show_status_live() {
             fi
         fi
 
-        # last backup file
+        # Last backup
         BACKUP_DIR="$INSTALL_DIR/backups"
         lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1 || true)
+
         if [[ -z "$lastfile" ]]; then
             echo "Last backup    : (belum ada)"
         else
@@ -463,13 +464,14 @@ show_status_live() {
 
         echo ""
         echo "--- Log auto-backup.service (3 baris terakhir) ---"
-        journalctl -u auto-backup.service -n 3 --no-pager
+        journalctl -u auto-backup.service -n 3 --no-pager 2>/dev/null || true
 
         echo ""
         echo "[Tekan CTRL+C untuk keluar realtime]"
         sleep 1
     done
 }
+
 
 
 
