@@ -335,126 +335,98 @@ confirm() {
 }
 
 # ---------- Status Menu ----------
-show_status_live() {
-    while true; do
-        clear
-        echo -e "\e[36m$WATERMARK_HEADER\e[0m"
-        echo "                LIVE STATUS (Realtime Refresh 1s)"
-        echo ""
+show_status() {
+    clear
+    echo -e "\e[36m$WATERMARK_HEADER\e[0m"
+    echo "                  STATUS BACKUP (Static)"
+    echo ""
 
-        GREEN="\e[32m"
-        BLUE="\e[34m"
-        RESET="\e[0m"
+    GREEN="\e[32m"
+    BLUE="\e[34m"
+    RESET="\e[0m"
 
-        # ------------------------------
-        # Service status
-        # ------------------------------
-        svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo "unknown")
-        svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null || echo "unknown")
-        echo "Service status : $svc_active (enabled: $svc_enabled)"
+    # Service
+    svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo "unknown")
+    svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null || echo "unknown")
+    echo "Service status : $svc_active (enabled: $svc_enabled)"
 
-        # ------------------------------
-        # Timer status
-        # ------------------------------
-        tm_active=$(systemctl is-active auto-backup.timer 2>/dev/null || echo "unknown")
-        tm_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null || echo "unknown")
-        echo "Timer status   : $tm_active (enabled: $tm_enabled)"
+    # Timer
+    tm_active=$(systemctl is-active auto-backup.timer 2>/dev/null || echo "unknown")
+    tm_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null || echo "unknown")
+    echo "Timer status   : $tm_active (enabled: $tm_enabled)"
 
-        # ------------------------------
-        # Next run
-        # ------------------------------
-        next_run=""
-        line=$(systemctl list-timers --all 2>/dev/null | grep auto-backup.timer | head -n1 || true)
+    # Next run
+    next_run=""
+    line=$(systemctl list-timers --all 2>/dev/null | grep auto-backup.timer | head -n1 || true)
+    if [[ -n "$line" ]]; then
+        nr1=$(echo "$line" | awk '{print $1}')
+        nr2=$(echo "$line" | awk '{print $2}')
+        nr3=$(echo "$line" | awk '{print $3}')
+        next_run="$nr1 $nr2 $nr3"
+    fi
+    [[ -z "$next_run" ]] && next_run="(tidak tersedia)"
+    echo -e "Next run       : ${BLUE}$next_run${RESET}"
 
-        if [[ -n "$line" ]]; then
-            nr1=$(echo "$line" | awk '{print $1}')
-            nr2=$(echo "$line" | awk '{print $2}')
-            nr3=$(echo "$line" | awk '{print $3}')
-            next_run="$nr1 $nr2 $nr3"
-        fi
+    # Time left and progress
+    if [[ "$next_run" =~ ^\( ]]; then
+        echo "Time left      : (tidak tersedia)"
+        echo "Progress       : (tidak tersedia)"
+    else
+        next_epoch=$(date -d "$next_run" +%s 2>/dev/null || echo 0)
+        now_epoch=$(date +%s)
 
-        if [[ -z "$next_run" ]]; then
-            next_run="(tidak tersedia)"
-        fi
-
-        echo -e "Next run       : ${BLUE}$next_run${RESET}"
-
-        # ------------------------------
-        # Time left + progress
-        # ------------------------------
-        if [[ "$next_run" =~ ^\( ]]; then
-            echo "Time left      : (tidak tersedia)"
-            echo "Progress       : (tidak tersedia)"
+        if (( next_epoch <= now_epoch )); then
+            echo "Time left      : 0 detik"
+            echo "Progress       : 100%"
         else
-            next_epoch=$(date -d "$next_run" +%s 2>/dev/null || echo 0)
-            now_epoch=$(date +%s)
+            diff=$(( next_epoch - now_epoch ))
+            d=$(( diff/86400 ))
+            h=$(( (diff%86400)/3600 ))
+            m=$(( (diff%3600)/60 ))
+            s=$(( diff%60 ))
+            echo "Time left      : $d hari $h jam $m menit $s detik"
 
-            if (( next_epoch <= now_epoch )); then
-                echo "Time left      : 0 detik"
-                echo "Progress       : 100%"
+            last_epoch=$(journalctl -u auto-backup.service --output=short-unix -n 50 \
+                | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1)
+
+            if [[ -z "$last_epoch" ]]; then
+                echo "Progress       : (tidak tersedia)"
             else
-                diff=$(( next_epoch - now_epoch ))
-                d=$(( diff/86400 ))
-                h=$(( (diff%86400)/3600 ))
-                m=$(( (diff%3600)/60 ))
-                s=$(( diff%60 ))
+                total_interval=$(( next_epoch - last_epoch ))
+                elapsed=$(( now_epoch - last_epoch ))
+                percent=$(( elapsed * 100 / total_interval ))
+                (( percent > 100 )) && percent=100
+                (( percent < 0 )) && percent=0
 
-                echo "Time left      : $d hari $h jam $m menit $s detik"
+                bars=$(( percent / 5 ))
+                bar=""
+                for ((i=1;i<=bars;i++)); do bar+="█"; done
+                while (( ${#bar} < 20 )); do bar+=" "; done
 
-                last_epoch=$(journalctl -u auto-backup.service --output=short-unix -n 50 \
-                    | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1)
-
-                if [[ -z "$last_epoch" ]]; then
-                    echo "Progress       : (tidak tersedia)"
-                else
-                    total_interval=$(( next_epoch - last_epoch ))
-                    elapsed=$(( now_epoch - last_epoch ))
-
-                    if (( total_interval <= 0 )); then
-                        percent=100
-                    else
-                        percent=$(( elapsed * 100 / total_interval ))
-                    fi
-
-                    (( percent > 100 )) && percent=100
-                    (( percent < 0 )) && percent=0
-
-                    bars=$(( percent / 5 ))
-                    bar=""
-                    for ((i=1;i<=bars;i++)); do bar+="█"; done
-                    while (( ${#bar} < 20 )); do bar+=" "; done
-
-                    echo -e "Progress       : ${BLUE}[${bar}]${RESET} $percent%"
-                fi
+                echo -e "Progress       : ${BLUE}[${bar}]${RESET} $percent%"
             fi
         fi
+    fi
 
-        # ------------------------------
-        # Last backup
-        # ------------------------------
-        BACKUP_DIR="$INSTALL_DIR/backups"
-        lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1 || true)
+    # Last file
+    BACKUP_DIR="$INSTALL_DIR/backups"
+    lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1 || true)
 
-        if [[ -z "$lastfile" ]]; then
-            echo "Last backup    : (belum ada)"
-        else
-            lasttime=$(stat -c '%y' "$BACKUP_DIR/$lastfile" | cut -d'.' -f1)
-            echo -e "Last backup    : ${GREEN}$lastfile${RESET} ($lasttime)"
-        fi
+    if [[ -z "$lastfile" ]]; then
+        echo "Last backup    : (belum ada)"
+    else
+        lasttime=$(stat -c '%y' "$BACKUP_DIR/$lastfile" | cut -d'.' -f1)
+        echo -e "Last backup    : ${GREEN}$lastfile${RESET} ($lasttime)"
+    fi
 
-        # ------------------------------
-        # Show log 3 lines
-        # ------------------------------
-        echo ""
-        echo "--- Log (3 baris terakhir) ---"
-        journalctl -u auto-backup.service -n 3 --no-pager || echo "(log tidak tersedia)"
+    echo ""
+    echo "--- Log terakhir ---"
+    journalctl -u auto-backup.service -n 5 --no-pager || echo "(log tidak tersedia)"
 
-        echo ""
-        echo -e "\e[36mTekan CTRL + C untuk keluar dari mode realtime.\e[0m"
-
-        sleep 1
-    done
+    echo ""
+    pause
 }
+
 
 
 
