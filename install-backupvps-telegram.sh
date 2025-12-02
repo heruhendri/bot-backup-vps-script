@@ -285,6 +285,16 @@ fi
 # load config
 # shellcheck source=/dev/null
 source "$CONFIG"
+# Prevent unbound variable crash
+BOT_TOKEN="${BOT_TOKEN:-}"
+CHAT_ID="${CHAT_ID:-}"
+FOLDERS_RAW="${FOLDERS_RAW:-}"
+USE_MYSQL="${USE_MYSQL:-n}"
+MYSQL_MULTI_CONF="${MYSQL_MULTI_CONF:-}"
+USE_PG="${USE_PG:-n}"
+RETENTION_DAYS="${RETENTION_DAYS:-7}"
+TZ="${TZ:-Asia/Jakarta}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/auto-backup}"
 
 save_config() {
     cat <<EOF > "$CONFIG"
@@ -330,113 +340,100 @@ show_status() {
     echo ""
 
     GREEN="\e[32m"
-    RED="\e[31m"
-    YELLOW="\e[33m"
     BLUE="\e[34m"
     RESET="\e[0m"
 
     # ----------------------------
-    # Service Status
+    # SERVICE STATUS
     # ----------------------------
-    svc_active=$(systemctl is-active auto-backup.service 2>/dev/null)
-    svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null)
+    svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo "unknown")
+    svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null || echo "unknown")
 
     echo "Service status : $svc_active (enabled: $svc_enabled)"
 
     # ----------------------------
-    # Timer Status
+    # TIMER STATUS
     # ----------------------------
-    tm_active=$(systemctl is-active auto-backup.timer 2>/dev/null)
-    tm_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null)
+    tm_active=$(systemctl is-active auto-backup.timer 2>/dev/null || echo "unknown")
+    tm_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null || echo "unknown")
 
     echo "Timer status   : $tm_active (enabled: $tm_enabled)"
 
     # ----------------------------
-    # NEXT RUN
+    # NEXT RUN (SAFE MODE)
     # ----------------------------
-
     next_run=""
 
-    # METHOD 1 — systemctl list-timers (paling stabil)
-    line=$(systemctl list-timers --all | grep auto-backup.timer | head -n1)
+    line=$(systemctl list-timers --all 2>/dev/null | grep auto-backup.timer | head -n1 || true)
+
     if [[ -n "$line" ]]; then
-        # Format umum:
-        # Tue 2025-12-03 03:00:00 ...
-        next_run=$(echo "$line" | awk '{print $1" "$2" "$3}')
+        n1=$(echo "$line" | awk '{print $1}')
+        n2=$(echo "$line" | awk '{print $2}')
+        n3=$(echo "$line" | awk '{print $3}')
+        next_run="$n1 $n2 $n3"
     fi
 
-    # METHOD 2 — NextElapseUSec
-    if [[ -z "$next_run" ]]; then
-        usec=$(systemctl show auto-backup.timer -p NextElapseUSec --value)
-        if [[ "$usec" =~ ^[0-9]+$ ]] && ((usec > 0)); then
-            epoch=$((usec/1000000))
-            next_run=$(date -d @"$epoch" "+%Y-%m-%d %H:%M:%S")
-        fi
-    fi
-
-    # METHOD 3 — fallback
-    if [[ -z "$next_run" ]]; then
+    if [[ -z "$next_run" || "$next_run" == "*" ]]; then
         next_run="(tidak tersedia)"
     fi
 
     echo -e "Next run       : ${BLUE}$next_run${RESET}"
 
     # ----------------------------
-    # TIME LEFT + PROGRESS BAR
+    # TIME LEFT + PROGRESS
     # ----------------------------
     if [[ "$next_run" =~ ^\( ]]; then
         echo "Time left      : (tidak tersedia)"
         echo "Progress       : (tidak tersedia)"
     else
-        next_epoch=$(date -d "$next_run" +%s 2>/dev/null)
-        now_epoch=$(date +%s)
-        diff=$((next_epoch - now_epoch))
+next_epoch=$(date -d "$next_run" +%s 2>/dev/null || echo 0)
 
-        if (( diff <= 0 )); then
-            echo "Time left      : 0 detik"
-            echo "Progress       : 100%"
-        else
-            d=$((diff/86400))
-            h=$(( (diff%86400)/3600 ))
-            m=$(( (diff%3600)/60 ))
-            s=$(( diff%60 ))
+            now_epoch=$(date +%s)
+            diff=$(( next_epoch - now_epoch ))
 
-            left=""
-            [[ $d -gt 0 ]] && left="$left$d hari "
-            [[ $h -gt 0 ]] && left="$left$h jam "
-            [[ $m -gt 0 ]] && left="$left$m menit "
-            left="$left$s detik"
-
-            echo -e "Time left      : ${GREEN}$left${RESET}"
-
-            # ----- PROGRESS (AKURAT) -----
-            # Cari LAST RUN dari journal
-            last_epoch=$(journalctl -u auto-backup.service --output=short-unix -n 50 \
-                | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1)
-
-            if [[ -z "$last_epoch" ]]; then
-                echo "Progress       : (tidak tersedia — last run tidak ditemukan)"
+            if (( diff <= 0 )); then
+                echo "Time left      : 0 detik"
+                echo "Progress       : 100%"
             else
-                total_interval=$(( next_epoch - last_epoch ))
-                elapsed=$(( now_epoch - last_epoch ))
+                d=$(( diff/86400 ))
+                h=$(( (diff%86400)/3600 ))
+                m=$(( (diff%3600)/60 ))
+                s=$(( diff%60 ))
 
-                # safety: avoid div by zero
-                if (( total_interval <= 0 )); then
-                    percent=100
-                else
-                    percent=$(( elapsed * 100 / total_interval ))
+                echo "Time left      : $d hari $h jam $m menit $s detik"
+
+                # LAST RUN
+                last_epoch=$(journalctl -u auto-backup.service --output=short-unix -n 50 \
+                    | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1)
+
+
+if [[ -z "$last_epoch" ]]; then
+    echo "Progress       : (tidak tersedia — last run tidak ditemukan)"
+else
+
+                    total_interval=$(( next_epoch - last_epoch ))
+                    elapsed=$(( now_epoch - last_epoch ))
+
+                    if (( total_interval <= 0 )); then
+                        percent=100
+                    else
+                        percent=$(( elapsed * 100 / total_interval ))
+                    fi
+
+                    (( percent > 100 )) && percent=100
+                    (( percent < 0 )) && percent=0
+
+                    bars=$(( percent / 5 ))
+                    bar=""
+                    for ((i=1;i<=bars;i++)); do bar+="█"; done
+                    while (( ${#bar} < 20 )); do bar+=" "; done
+
+                    echo -e "Progress       : ${BLUE}[${bar}]${RESET} $percent%"
                 fi
-
-                [[ $percent -gt 100 ]] && percent=100
-                [[ $percent -lt 0 ]] && percent=0
-
-                bars=$(( percent / 5 ))
-                bar=""
-                for ((i=1; i<=bars; i++)); do bar="${bar}█"; done
-                while (( ${#bar} < 20 )); do bar="${bar} "; done
-
-                echo -e "Progress       : ${BLUE}[${bar}]${RESET} $percent%"
             fi
+        else
+            echo "Time left      : (invalid date)"
+            echo "Progress       : (invalid date)"
         fi
     fi
 
@@ -444,28 +441,27 @@ show_status() {
     # LAST BACKUP FILE
     # ----------------------------
     BACKUP_DIR="$INSTALL_DIR/backups"
-    if [[ ! -d "$BACKUP_DIR" ]]; then
-        echo "Last backup    : (directory tidak ditemukan)"
+    lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1 || true)
+
+    if [[ -z "$lastfile" ]]; then
+        echo "Last backup    : (belum ada)"
     else
-        lastfile=$(ls -1t "$BACKUP_DIR" | head -n1 2>/dev/null || true)
-        if [[ -z "$lastfile" ]]; then
-            echo "Last backup    : (belum ada)"
-        else
-            lasttime=$(stat -c '%y' "$BACKUP_DIR/$lastfile" | cut -d'.' -f1)
-            echo -e "Last backup    : ${GREEN}$lastfile${RESET} ($lasttime)"
-        fi
+        lasttime=$(stat -c '%y' "$BACKUP_DIR/$lastfile" | cut -d'.' -f1)
+        echo -e "Last backup    : ${GREEN}$lastfile${RESET} ($lasttime)"
     fi
 
     # ----------------------------
     # SHOW LOG
     # ----------------------------
-    echo -e "\n--- Log terakhir auto-backup.service ---"
+    echo ""
+    echo "--- Log auto-backup.service (5 baris terakhir) ---"
     journalctl -u auto-backup.service -n 5 --no-pager || echo "(log tidak tersedia)"
 
     echo ""
     echo -e "\e[36m$WATERMARK_FOOTER\e[0m"
     pause
 }
+
 
 # ---------- Folder / MySQL / PG functions ----------
 add_folder() {
