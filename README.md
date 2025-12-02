@@ -160,20 +160,63 @@ Menu lengkap:
 
 ```mermaid
 flowchart TD
-    A[VPS Server] -->|Backup Folder| B[backup-runner.sh]
-    A -->|MySQL Dump| B
-    A -->|PostgreSQL Dump| B
+    A[VPS Server] --> B[Backup Runner]
+    A --> C[MySQL Dump]
+    A --> D[PostgreSQL Dump]
 
-    B -->|Tar.gz Archive| C[/opt/auto-backup/backups]
-    B -->|Send File| D[Telegram Bot API]
+    B --> E[Create Archive]
+    E --> F[Backup Folder]
 
-    E[Systemd Timer<br>auto-backup.timer] --> B
-    F[Systemd Service<br>auto-backup.service] --> B
+    F --> G[Send to Telegram]
 
-    G[menu-bot-backup] -->|Edit config.conf| B
-    G -->|Rebuild Runner/Service/Timer| B
+    H[Systemd Timer] --> B
+    I[Systemd Service] --> B
+
+    J[Menu PRO] --> K[Edit config.conf]
+    J --> L[Rebuild System]
+
+    K --> B
+    L --> B
+
 ```
+---
+# 🚲 **ALUR BACKUP SYSTEM**
 
+```mermaid
+flowchart TD
+    Start([Start]) --> Load[Load Config]
+
+    Load --> Tmp[Create Temp Dir]
+
+    Tmp --> Copy[Copy Folders]
+    Copy --> MySQL{Use MySQL?}
+
+    MySQL -->|Yes| DumpMySQL[Dump MySQL]
+    MySQL -->|No| SkipMySQL[Skip]
+
+    DumpMySQL --> PG{Use PostgreSQL?}
+    SkipMySQL --> PG
+
+    PG -->|Yes| DumpPG[Dump PostgreSQL]
+    PG -->|No| SkipPG[Skip]
+
+    DumpPG --> Tar[Create TAR.GZ]
+    SkipPG --> Tar
+
+    Tar --> Send{Send to Telegram?}
+
+    Send -->|Yes| Upload[Upload File]
+    Send -->|No| SkipSend[Skip]
+
+    Upload --> Clean[Cleanup Temp]
+    SkipSend --> Clean
+
+    Clean --> Retention[Delete Old Backups]
+
+    Retention --> End([Done])
+
+
+```
 ---
 
 # 📂 **STRUKTUR DIREKTORI**
