@@ -343,33 +343,23 @@ show_status() {
     BLUE="\e[34m"
     RESET="\e[0m"
 
-    # --------------------------------------------------
-    # SERVICE STATUS
-    # --------------------------------------------------
+    # ---------------- SERVICE STATUS ----------------
     svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo "unknown")
     svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null || echo "unknown")
-
     echo "Service status : $svc_active (enabled: $svc_enabled)"
 
-    # --------------------------------------------------
-    # TIMER STATUS
-    # --------------------------------------------------
+    # ---------------- TIMER STATUS ------------------
     tm_active=$(systemctl is-active auto-backup.timer 2>/dev/null || echo "unknown")
     tm_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null || echo "unknown")
-
     echo "Timer status   : $tm_active (enabled: $tm_enabled)"
 
-    # --------------------------------------------------
-    # NEXT RUN
-    # --------------------------------------------------
+    # ---------------- NEXT RUN ----------------------
     next_run=""
     line=$(systemctl list-timers --all 2>/dev/null | grep auto-backup.timer | head -n1 || true)
 
     if [[ -n "$line" ]]; then
-        nr1=$(echo "$line" | awk '{print $1}')
-        nr2=$(echo "$line" | awk '{print $2}')
-        nr3=$(echo "$line" | awk '{print $3}')
-        next_run="$nr1 $nr2 $nr3"
+        # Ambil 4 kolom pertama: DAY DATE TIME TZ
+        next_run=$(echo "$line" | awk '{print $1" "$2" "$3" "$4}')
     fi
 
     if [[ -z "$next_run" || "$next_run" == "*" ]]; then
@@ -378,13 +368,10 @@ show_status() {
 
     echo -e "Next run       : ${BLUE}$next_run${RESET}"
 
-    # --------------------------------------------------
-    # TIME LEFT + PROGRESS
-    # --------------------------------------------------
+    # ------------- TIME LEFT + PROGRESS -------------
     if [[ "$next_run" =~ ^\( ]]; then
         echo "Time left      : (tidak tersedia)"
         echo "Progress       : (tidak tersedia)"
-
     else
         next_epoch=$(date -d "$next_run" +%s 2>/dev/null || echo 0)
         now_epoch=$(date +%s)
@@ -392,7 +379,6 @@ show_status() {
         if (( next_epoch <= now_epoch )); then
             echo "Time left      : 0 detik"
             echo "Progress       : 100%"
-
         else
             diff=$(( next_epoch - now_epoch ))
 
@@ -403,13 +389,12 @@ show_status() {
 
             echo "Time left      : $d hari $h jam $m menit $s detik"
 
-            # LAST RUN
+            # Ambil LAST RUN dari log
             last_epoch=$(journalctl -u auto-backup.service --output=short-unix -n 50 \
                 | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1)
 
             if [[ -z "$last_epoch" ]]; then
                 echo "Progress       : (tidak tersedia — last run tidak ditemukan)"
-
             else
                 total_interval=$(( next_epoch - last_epoch ))
                 elapsed=$(( now_epoch - last_epoch ))
@@ -434,9 +419,7 @@ show_status() {
         fi
     fi
 
-    # --------------------------------------------------
-    # LAST BACKUP FILE
-    # --------------------------------------------------
+    # ---------------- LAST BACKUP -------------------
     BACKUP_DIR="$INSTALL_DIR/backups"
     lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1 || true)
 
@@ -447,9 +430,7 @@ show_status() {
         echo -e "Last backup    : ${GREEN}$lastfile${RESET} ($lasttime)"
     fi
 
-    # --------------------------------------------------
-    # SHOW LOG
-    # --------------------------------------------------
+    # ---------------- SHOW LOG ----------------------
     echo ""
     echo "--- Log auto-backup.service (5 baris terakhir) ---"
     journalctl -u auto-backup.service -n 5 --no-pager || echo "(log tidak tersedia)"
@@ -458,6 +439,7 @@ show_status() {
     echo -e "\e[36m$WATERMARK_FOOTER\e[0m"
     pause
 }
+
 
 
 
