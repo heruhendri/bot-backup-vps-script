@@ -84,46 +84,60 @@ Fitur:
 ### Arsitektur (high level)
 ```mermaid
 flowchart LR
-  A[Systemd Timer: auto-backup.timer] -->|triggers| B[Systemd Service: auto-backup.service]
+  A[Systemd Timer<br>auto-backup.timer] --> B[Systemd Service<br>auto-backup.service]
   B --> C[backup-runner.sh]
-  C --> D[Collect folders -> tmp dir]
-  C --> E[MySQL dumps (mysqldump)]
-  C --> F[Postgres dump (pg_dumpall)]
-  C --> G[Archive (.tar.gz) -> /opt/auto-backup/backups]
-  G --> H[Send to Telegram via Bot API]
-  C --> I[Cleanup tmp]
-  C --> J[Retention cleanup (find -mtime)]
-  subgraph Files
-    CFG[config.conf]
-  end
-  CFG --> C
+
+  C --> D[Copy Folders]
+  C --> E[MySQL Dump]
+  C --> F[PostgreSQL Dump]
+  C --> G[Create Archive]
+  G --> H[Send to Telegram]
+
+  C --> I[Cleanup Temp Files]
+  C --> J[Retention Cleanup]
+
+  CFG[config.conf] --> C
   MENU[menu-bot-backup] --> CFG
-  MENU -->|rebuild| C
+  MENU --> C
+
 ```
 
 ### Flowchart proses backup (runner)
 ```mermaid
 flowchart TD
-  Start([Start]) --> CheckConfig{Config exists?}
-  CheckConfig -->|no| Error["Exit w/ error"]
-  CheckConfig -->|yes| ReadCfg[Source config.conf]
-  ReadCfg --> MakeTmp[Create TMP dir]
-  MakeTmp --> CopyFolders{Loop over FOLDERS_RAW}
-  CopyFolders -->|dir exists| CopyOk[cp -a to TMP]
-  CopyFolders -->|not exists| SkipFolder
-  CopyOk --> MySQLCheck{USE_MYSQL == y?}
-  MySQLCheck -->|yes| DumpMySQL[Loop entries -> mysqldump]
-  MySQLCheck -->|no| SkipMySQL
-  DumpMySQL --> PGCheck{USE_PG == y?}
-  PGCheck -->|yes| DumpPG[su - postgres -c "pg_dumpall"]
-  PGCheck -->|no| SkipPG
-  DumpPG --> Tar[tar -czf backup-<date>.tar.gz]
-  Tar --> SendTG{BOT_TOKEN & CHAT_ID set?}
-  SendTG -->|yes| CurlTG[curl -F document=@file sendDocument]
-  SendTG -->|no| LogSkip[Log: skipping telegram send]
-  CurlTG --> CleanupTmp[rm -rf TMP]
-  CleanupTmp --> Retention[find -mtime +RETENTION_DAYS -delete]
-  Retention --> End([OK])
+  Start([Start]) --> CheckConfig{Config Exists?}
+
+  CheckConfig -->|No| Error[Exit Error]
+  CheckConfig -->|Yes| ReadCfg[Load config.conf]
+
+  ReadCfg --> MakeTmp[Create Temp Directory]
+
+  MakeTmp --> CopyFolders[Copy Folders]
+
+  CopyFolders --> MySQLCheck{Use MySQL?}
+  MySQLCheck -->|Yes| DumpMySQL[Run mysqldump]
+  MySQLCheck -->|No| SkipMySQL[Skip MySQL]
+
+  DumpMySQL --> PGCheck{Use PostgreSQL?}
+  SkipMySQL --> PGCheck
+
+  PGCheck -->|Yes| DumpPG[Run pg_dumpall]
+  PGCheck -->|No| SkipPG[Skip PostgreSQL]
+
+  DumpPG --> Archive[Create TAR.GZ Archive]
+  SkipPG --> Archive
+
+  Archive --> TGCheck{Send to Telegram?}
+  TGCheck -->|Yes| SendTG[Upload via Bot API]
+  TGCheck -->|No| SkipTG[Skip Sending]
+
+  SendTG --> Cleanup[Delete Temp Directory]
+  SkipTG --> Cleanup
+
+  Cleanup --> Retention[Delete Old Backups]
+
+  Retention --> End([Completed])
+
 ```
 
 ---
