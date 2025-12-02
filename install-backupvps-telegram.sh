@@ -343,19 +343,24 @@ show_status() {
     BLUE="\e[34m"
     RESET="\e[0m"
 
-    # -----------------------------------------
-    # SERVICE STATUS
-    # -----------------------------------------
-    svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo "unknown")
-    svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null || echo "unknown")
-    echo "Service status : $svc_active (enabled: $svc_enabled)"
+# SERVICE STATUS
+svc_active=$(systemctl is-active auto-backup.service 2>/dev/null)
+svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null)
 
-    # -----------------------------------------
-    # TIMER STATUS
-    # -----------------------------------------
-    tm_active=$(systemctl is-active auto-backup.timer 2>/dev/null || echo "unknown")
-    tm_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null || echo "unknown")
-    echo "Timer status   : $tm_active (enabled: $tm_enabled)"
+[[ -z "$svc_active" ]] && svc_active="unknown"
+[[ -z "$svc_enabled" ]] && svc_enabled="unknown"
+
+echo "Service status : $svc_active (enabled: $svc_enabled)"
+
+# TIMER STATUS
+tm_active=$(systemctl is-active auto-backup.timer 2>/dev/null)
+tm_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null)
+
+[[ -z "$tm_active" ]] && tm_active="unknown"
+[[ -z "$tm_enabled" ]] && tm_enabled="unknown"
+
+echo "Timer status   : $tm_active (enabled: $tm_enabled)"
+
 
     # -----------------------------------------
     # NEXT RUN (SAFE)
