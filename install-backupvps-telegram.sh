@@ -81,6 +81,52 @@ if [[ "$UPDATE_CONFIG" == "y" ]]; then
         MYSQL_MULTI_CONF=""
     fi
 
+    # ------------------ MongoDB ------------------
+    read -p "Backup MongoDB? (y/n): " USE_MONGO
+    MONGO_MULTI_CONF=""
+    if [[ "$USE_MONGO" == "y" ]]; then
+        echo ""
+        read -p "Berapa konfigurasi MongoDB yang ingin Anda tambahkan? " MONGO_COUNT
+        MONGO_COUNT=${MONGO_COUNT:-0}
+        for ((i=1; i<=MONGO_COUNT; i++)); do
+            echo ""
+            echo "📌 Konfigurasi MongoDB ke-$i"
+            read -p "Mongo Host (default: localhost): " MONGO_HOST
+            MONGO_HOST=${MONGO_HOST:-localhost}
+            read -p "Mongo Port (default: 27017): " MONGO_PORT
+            MONGO_PORT=${MONGO_PORT:-27017}
+            read -p "Mongo Username (kosong jika tidak pakai auth): " MONGO_USER
+            if [[ -n "$MONGO_USER" ]]; then
+                read -s -p "Mongo Password: " MONGO_PASS
+                echo ""
+                read -p "Authentication DB (default: admin): " MONGO_AUTHDB
+                MONGO_AUTHDB=${MONGO_AUTHDB:-admin}
+            else
+                MONGO_PASS=""
+                MONGO_AUTHDB=""
+            fi
+            echo "Mode backup database:"
+            echo "1) Backup SEMUA database"
+            echo "2) Pilih database tertentu"
+            read -p "Pilih (1/2): " MODE
+            if [[ "$MODE" == "1" ]]; then
+                MDBLIST="all"
+            else
+                read -p "Masukkan daftar DB (comma separated, ex: db1,db2): " MDBLIST
+            fi
+            # Entry format: user:pass@host:port:authdb:dbs
+            ENTRY="${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}:${MONGO_PORT}:${MONGO_AUTHDB}:${MDBLIST}"
+            if [[ -z "$MONGO_MULTI_CONF" ]]; then
+                MONGO_MULTI_CONF="$ENTRY"
+            else
+                MONGO_MULTI_CONF="${MONGO_MULTI_CONF};${ENTRY}"
+            fi
+        done
+    else
+        MONGO_MULTI_CONF=""
+    fi
+    # ------------------ end MongoDB ------------------
+
     read -p "Backup PostgreSQL? (y/n): " USE_PG
     read -p "Retention (berapa hari file backup disimpan): " RETENTION_DAYS
     read -p "Timezone (contoh: Asia/Jakarta): " TZ
@@ -99,6 +145,9 @@ FOLDERS_RAW="$FOLDERS_RAW"
 USE_MYSQL="$USE_MYSQL"
 MYSQL_MULTI_CONF="$MYSQL_MULTI_CONF"
 
+USE_MONGO="$USE_MONGO"
+MONGO_MULTI_CONF="$MONGO_MULTI_CONF"
+
 USE_PG="$USE_PG"
 RETENTION_DAYS="$RETENTION_DAYS"
 TZ="$TZ"
@@ -115,6 +164,7 @@ else
     # ensure defaults exist
     FOLDERS_RAW=${FOLDERS_RAW:-""}
     MYSQL_MULTI_CONF=${MYSQL_MULTI_CONF:-""}
+    MONGO_MULTI_CONF=${MONGO_MULTI_CONF:-""}
     RETENTION_DAYS=${RETENTION_DAYS:-30}
     TZ=${TZ:-UTC}
     CRON_TIME=${CRON_TIME:-"*-*-* 03:00:00"}
@@ -180,6 +230,57 @@ if [[ "${USE_MYSQL:-n}" == "y" && ! -z "${MYSQL_MULTI_CONF:-}" ]]; then
     done
 fi
 
+# backup mongo
+if [[ "${USE_MONGO:-n}" == "y" && ! -z "${MONGO_MULTI_CONF:-}" ]]; then
+    mkdir -p "$TMP_DIR/mongo"
+    IFS=';' read -r -a MONGO_ITEMS <<< "$MONGO_MULTI_CONF"
+    for ITEM in "${MONGO_ITEMS[@]}"; do
+        # format: user:pass@host:port:authdb:dbs
+        CREDS=$(echo "$ITEM" | cut -d'@' -f1)
+        HOSTPART=$(echo "$ITEM" | cut -d'@' -f2)
+        MONGO_USER=$(echo "$CREDS" | cut -d':' -f1)
+        MONGO_PASS=$(echo "$CREDS" | cut -d':' -f2)
+        MONGO_HOST=$(echo "$HOSTPART" | cut -d':' -f1)
+        MONGO_PORT=$(echo "$HOSTPART" | cut -d':' -f2)
+        MONGO_AUTHDB=$(echo "$HOSTPART" | cut -d':' -f3)
+        MONGO_DB_LIST=$(echo "$HOSTPART" | cut -d':' -f4)
+
+        # build target subdir name safe
+        SAFE_NAME=$(echo "${MONGO_USER}_${MONGO_HOST}_${MONGO_PORT}" | sed 's/[^a-zA-Z0-9._-]/_/g')
+        DEST_DIR="$TMP_DIR/mongo/$SAFE_NAME"
+        mkdir -p "$DEST_DIR"
+
+        # check mongodump
+        if ! command -v mongodump >/dev/null 2>&1; then
+            echo "[WARN] mongodump not found; skip mongo dump for $MONGO_HOST:$MONGO_PORT"
+            continue
+        fi
+
+        # build base args
+        BASE="--host=${MONGO_HOST} --port=${MONGO_PORT} --out=${DEST_DIR}"
+        if [[ -n "$MONGO_USER" ]]; then
+            BASE="$BASE --username=${MONGO_USER} --password='${MONGO_PASS}' --authenticationDatabase=${MONGO_AUTHDB}"
+        fi
+
+        if [[ "$MONGO_DB_LIST" == "all" ]]; then
+            # dump all (mongodump without --db dumps all DBs)
+            # note: mongodump default dumps all if no --db specified
+            eval mongodump $BASE || true
+        else
+            IFS=',' read -r -a MDBARR <<< "$MONGO_DB_LIST"
+            for MDB in "${MDBARR[@]}"; do
+                eval mongodump $BASE --db="${MDB}" || true
+            done
+        fi
+
+        # compress this mongo dump dir into tar.gz
+        if [[ -d "$DEST_DIR" ]]; then
+            tar -czf "${DEST_DIR}.tar.gz" -C "$DEST_DIR" . || true
+            rm -rf "$DEST_DIR"
+        fi
+    done
+fi
+
 # backup postgres
 if [[ "${USE_PG:-n}" == "y" ]]; then
     mkdir -p "$TMP_DIR/postgres"
@@ -221,7 +322,7 @@ echo "[OK] Backup runner created: $RUNNER"
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=Auto Backup VPS to Telegram
-After=network.target mysql.service mariadb.service postgresql.service
+After=network.target mysql.service mariadb.service postgresql.service mongodb.service
 
 [Service]
 Type=oneshot
@@ -291,6 +392,8 @@ CHAT_ID="${CHAT_ID:-}"
 FOLDERS_RAW="${FOLDERS_RAW:-}"
 USE_MYSQL="${USE_MYSQL:-n}"
 MYSQL_MULTI_CONF="${MYSQL_MULTI_CONF:-}"
+USE_MONGO="${USE_MONGO:-n}"
+MONGO_MULTI_CONF="${MONGO_MULTI_CONF:-}"
 USE_PG="${USE_PG:-n}"
 RETENTION_DAYS="${RETENTION_DAYS:-7}"
 TZ="${TZ:-Asia/Jakarta}"
@@ -304,6 +407,9 @@ FOLDERS_RAW="$FOLDERS_RAW"
 
 USE_MYSQL="$USE_MYSQL"
 MYSQL_MULTI_CONF="$MYSQL_MULTI_CONF"
+
+USE_MONGO="$USE_MONGO"
+MONGO_MULTI_CONF="$MONGO_MULTI_CONF"
 
 USE_PG="$USE_PG"
 RETENTION_DAYS="$RETENTION_DAYS"
@@ -371,14 +477,9 @@ show_status() {
     read -p "Tekan ENTER untuk kembali..."
 }
 
-
-
 # -------- Show Status Live (fixed auto-refresh) ----------
 show_status_live() {
-    # ensure terminal cleanup on exit
     trap 'tput cnorm; stty sane; clear; echo "Keluar dari mode realtime."; return 0' SIGINT SIGTERM
-
-    # hide cursor
     tput civis 2>/dev/null || true
 
     while true; do
@@ -391,17 +492,14 @@ show_status_live() {
         BLUE="\e[34m"
         RESET="\e[0m"
 
-        # Service status
         svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo "unknown")
         svc_enabled=$(systemctl is-enabled auto-backup.service 2>/dev/null || echo "unknown")
         echo "Service status : $svc_active (enabled: $svc_enabled)"
 
-        # Timer status
         tm_active=$(systemctl is-active auto-backup.timer 2>/dev/null || echo "unknown")
         tm_enabled=$(systemctl is-enabled auto-backup.timer 2>/dev/null || echo "unknown")
         echo "Timer status   : $tm_active (enabled: $tm_enabled)"
 
-        # Next run (safe parse)
         line=$(systemctl list-timers --all 2>/dev/null | grep auto-backup.timer | head -n1 || true)
         if [[ -n "$line" ]]; then
             nr1=$(echo "$line" | awk '{print $1}')
@@ -413,12 +511,10 @@ show_status_live() {
         fi
         echo -e "Next run       : ${BLUE}$next_run${RESET}"
 
-        # Time left + progress
         if [[ "$next_run" =~ ^\( ]]; then
             echo "Time left      : (tidak tersedia)"
             echo "Progress       : (tidak tersedia)"
         else
-            # prevent date -d errors by checking non-empty
             next_epoch=0
             if ! next_epoch=$(date -d "$next_run" +%s 2>/dev/null); then
                 next_epoch=0
@@ -436,7 +532,6 @@ show_status_live() {
                 s=$(( diff%60 ))
                 echo "Time left      : $d hari $h jam $m menit $s detik"
 
-                # last run epoch (from journal)
                 last_epoch=$(journalctl -u auto-backup.service --output=short-unix -n 50 --no-pager \
                     | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1 || true)
 
@@ -465,7 +560,6 @@ show_status_live() {
             fi
         fi
 
-        # Last backup file
         BACKUP_DIR="$INSTALL_DIR/backups"
         lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1 || true)
         if [[ -z "$lastfile" ]]; then
@@ -477,28 +571,17 @@ show_status_live() {
 
         echo ""
         echo "--- Log auto-backup.service (3 baris terakhir) ---"
-        # use --no-pager so it returns immediately
         journalctl -u auto-backup.service -n 3 --no-pager 2>/dev/null || echo "(log tidak tersedia)"
 
         echo ""
         echo "[Tekan CTRL+C untuk keluar realtime]"
-        # sleep 1 with interruptability
         sleep 1 || true
     done
 
-    # restore cursor on exit (in case trap didn't run)
     tput cnorm 2>/dev/null || true
 }
 
-
-
-
-
-
-
-
-
-# ---------- Folder / MySQL / PG functions ----------
+# ---------- Folder / MySQL / PG / Mongo functions ----------
 add_folder() {
     read -p "Masukkan folder baru (single path, atau comma separated): " NEW_FOLDER
     if [[ -z "$NEW_FOLDER" ]]; then
@@ -533,6 +616,7 @@ delete_folder() {
     echo "[OK] Folder dihapus."
 }
 
+# MySQL handlers (unchanged from before)
 list_mysql() {
     if [[ -z "$MYSQL_MULTI_CONF" ]]; then
         echo "(tidak ada konfigurasi MySQL)"
@@ -593,6 +677,83 @@ delete_mysql() {
     if ! [[ "$NUM" =~ ^[0-9]+$ ]] || (( NUM < 1 || NUM > ${#LIST[@]} )); then echo "Pilihan invalid."; return; fi
     unset 'LIST[NUM-1]'
     MYSQL_MULTI_CONF=$(IFS=';'; echo "${LIST[*]}")
+    echo "[OK] Dihapus."
+}
+
+# -------- Mongo handlers (new) ----------
+list_mongo() {
+    if [[ -z "$MONGO_MULTI_CONF" ]]; then
+        echo "(tidak ada konfigurasi MongoDB)"
+        return
+    fi
+    IFS=';' read -ra LIST <<< "$MONGO_MULTI_CONF"
+    i=1
+    for item in "${LIST[@]}"; do
+        echo "[$i] $item"
+        ((i++))
+    done
+}
+
+add_mongo() {
+    echo "Tambah konfigurasi MongoDB baru:"
+    read -p "Mongo Host (default: localhost): " MONGO_HOST
+    MONGO_HOST=${MONGO_HOST:-localhost}
+    read -p "Mongo Port (default: 27017): " MONGO_PORT
+    MONGO_PORT=${MONGO_PORT:-27017}
+    read -p "Mongo Username (kosong jika tidak pakai auth): " MONGO_USER
+    if [[ -n "$MONGO_USER" ]]; then
+        read -s -p "Mongo Password: " MONGO_PASS
+        echo ""
+        read -p "Authentication DB (default: admin): " MONGO_AUTHDB
+        MONGO_AUTHDB=${MONGO_AUTHDB:-admin}
+    else
+        MONGO_PASS=""
+        MONGO_AUTHDB=""
+    fi
+    echo "Mode database: 1) Semua  2) Pilih"
+    read -p "Pilih: " MODE
+    if [[ "$MODE" == "1" ]]; then MDBLIST="all"; else read -p "Masukkan nama database (comma separated): " MDBLIST; fi
+    NEW_ENTRY="${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}:${MONGO_PORT}:${MONGO_AUTHDB}:${MDBLIST}"
+    if [[ -z "$MONGO_MULTI_CONF" ]]; then MONGO_MULTI_CONF="$NEW_ENTRY"; else MONGO_MULTI_CONF="$MONGO_MULTI_CONF;$NEW_ENTRY"; fi
+    echo "[OK] Ditambahkan."
+}
+
+edit_mongo() {
+    if [[ -z "$MONGO_MULTI_CONF" ]]; then echo "Tidak ada konfigurasi MongoDB."; return; fi
+    IFS=';' read -ra LIST <<< "$MONGO_MULTI_CONF"
+    for i in "${!LIST[@]}"; do printf "%2d) %s\n" $((i+1)) "${LIST[$i]}"; done
+    read -p "Pilih nomor untuk diedit: " NUM
+    if ! [[ "$NUM" =~ ^[0-9]+$ ]] || (( NUM < 1 || NUM > ${#LIST[@]} )); then echo "Pilihan invalid."; return; fi
+    IDX=$((NUM-1))
+    OLD="${LIST[$IDX]}"
+    echo "Konfigurasi lama: $OLD"
+    OLD_USER=$(echo "$OLD" | cut -d':' -f1)
+    OLD_PASS=$(echo "$OLD" | cut -d':' -f2 | cut -d'@' -f1)
+    OLD_HOST=$(echo "$OLD" | cut -d'@' -f2 | cut -d':' -f1)
+    OLD_PORT=$(echo "$OLD" | cut -d'@' -f2 | cut -d':' -f2)
+    OLD_AUTHDB=$(echo "$OLD" | cut -d'@' -f2 | cut -d':' -f3)
+    OLD_DB=$(echo "$OLD" | rev | cut -d: -f1 | rev)
+    read -p "Mongo Host [$OLD_HOST]: " MONGO_HOST; MONGO_HOST=${MONGO_HOST:-$OLD_HOST}
+    read -p "Mongo Port [$OLD_PORT]: " MONGO_PORT; MONGO_PORT=${MONGO_PORT:-$OLD_PORT}
+    read -p "Mongo Username [$OLD_USER]: " MONGO_USER; MONGO_USER=${MONGO_USER:-$OLD_USER}
+    read -s -p "Mongo Password (kosong = tetap): " MONGO_PASS; echo ""
+    if [[ -z "$MONGO_PASS" ]]; then MONGO_PASS="$OLD_PASS"; fi
+    read -p "Authentication DB [$OLD_AUTHDB]: " MONGO_AUTHDB; MONGO_AUTHDB=${MONGO_AUTHDB:-$OLD_AUTHDB}
+    read -p "Database (comma or 'all') [$OLD_DB]: " MDBLIST; MDBLIST=${MDBLIST:-$OLD_DB}
+    NEW_ENTRY="${MONGO_USER}:${MONGO_PASS}@${MONGO_HOST}:${MONGO_PORT}:${MONGO_AUTHDB}:${MDBLIST}"
+    LIST[$IDX]="$NEW_ENTRY"
+    MONGO_MULTI_CONF=$(IFS=';'; echo "${LIST[*]}")
+    echo "[OK] Konfigurasi MongoDB diperbarui."
+}
+
+delete_mongo() {
+    if [[ -z "$MONGO_MULTI_CONF" ]]; then echo "Tidak ada konfigurasi MongoDB."; return; fi
+    IFS=';' read -ra LIST <<< "$MONGO_MULTI_CONF"
+    for i in "${!LIST[@]}"; do printf "%2d) %s\n" $((i+1)) "${LIST[$i]}"; done
+    read -p "Pilih nomor yang ingin dihapus: " NUM
+    if ! [[ "$NUM" =~ ^[0-9]+$ ]] || (( NUM < 1 || NUM > ${#LIST[@]} )); then echo "Pilihan invalid."; return; fi
+    unset 'LIST[NUM-1]'
+    MONGO_MULTI_CONF=$(IFS=';'; echo "${LIST[*]}")
     echo "[OK] Dihapus."
 }
 
@@ -701,6 +862,49 @@ if [[ "$USE_MYSQL" == "y" && ! -z "$MYSQL_MULTI_CONF" ]]; then
     done
 fi
 
+if [[ "$USE_MONGO" == "y" && ! -z "$MONGO_MULTI_CONF" ]]; then
+    mkdir -p "$TMP_DIR/mongo"
+    IFS=';' read -r -a MONGO_ITEMS <<< "$MONGO_MULTI_CONF"
+    for ITEM in "${MONGO_ITEMS[@]}"; do
+        CREDS=$(echo "$ITEM" | cut -d'@' -f1)
+        HOSTPART=$(echo "$ITEM" | cut -d'@' -f2)
+        MONGO_USER=$(echo "$CREDS" | cut -d':' -f1)
+        MONGO_PASS=$(echo "$CREDS" | cut -d':' -f2)
+        MONGO_HOST=$(echo "$HOSTPART" | cut -d':' -f1)
+        MONGO_PORT=$(echo "$HOSTPART" | cut -d':' -f2)
+        MONGO_AUTHDB=$(echo "$HOSTPART" | cut -d':' -f3)
+        MONGO_DB_LIST=$(echo "$HOSTPART" | cut -d':' -f4)
+
+        SAFE_NAME=$(echo "${MONGO_USER}_${MONGO_HOST}_${MONGO_PORT}" | sed 's/[^a-zA-Z0-9._-]/_/g')
+        DEST_DIR="$TMP_DIR/mongo/$SAFE_NAME"
+        mkdir -p "$DEST_DIR"
+
+        if ! command -v mongodump >/dev/null 2>&1; then
+            echo "[WARN] mongodump not found; skip mongo dump for $MONGO_HOST:$MONGO_PORT"
+            continue
+        fi
+
+        BASE="--host=${MONGO_HOST} --port=${MONGO_PORT} --out=${DEST_DIR}"
+        if [[ -n "$MONGO_USER" ]]; then
+            BASE="$BASE --username=${MONGO_USER} --password='${MONGO_PASS}' --authenticationDatabase=${MONGO_AUTHDB}"
+        fi
+
+        if [[ "$MONGO_DB_LIST" == "all" ]]; then
+            eval mongodump $BASE || true
+        else
+            IFS=',' read -r -a MDBARR <<< "$MONGO_DB_LIST"
+            for MDB in "${MDBARR[@]}"; do
+                eval mongodump $BASE --db="${MDB}" || true
+            done
+        fi
+
+        if [[ -d "$DEST_DIR" ]]; then
+            tar -czf "${DEST_DIR}.tar.gz" -C "$DEST_DIR" . || true
+            rm -rf "$DEST_DIR"
+        fi
+    done
+fi
+
 if [[ "$USE_PG" == "y" ]]; then
     mkdir -p "$TMP_DIR/postgres"
     su - postgres -c "pg_dumpall > $TMP_DIR/postgres/all.sql" || true
@@ -717,7 +921,7 @@ EOR
     cat <<EOT > "$SERVICE_FILE"
 [Unit]
 Description=Auto Backup VPS to Telegram
-After=network.target mysql.service mariadb.service postgresql.service
+After=network.target mysql.service mariadb.service postgresql.service mongodb.service
 
 [Service]
 Type=oneshot
@@ -807,18 +1011,21 @@ while true; do
     echo "6) Tambah konfigurasi MySQL"
     echo "7) Edit konfigurasi MySQL"
     echo "8) Hapus konfigurasi MySQL"
-    echo "9) Edit PostgreSQL settings & test dump"
-    echo "10) Ubah timezone"
-    echo "11) Ubah retention days"
-    echo "12) Ubah jadwal backup (OnCalendar helper)"
-    echo "13) Test backup sekarang"
-    echo "14) Restore dari backup"
-    echo "15) Rebuild / Repair installer files (service/timer/runner)"
-    echo "16) Encrypt latest backup (zip with password)"
-    echo "17) Restart service & timer"
-    echo "18) Simpan config"
-    echo "19) Status (service / last backup / next run)"
-    echo "20) Status Realtime (live monitor)"
+    echo "9) Tambah konfigurasi MongoDB"
+    echo "10) Edit konfigurasi MongoDB"
+    echo "11) Hapus konfigurasi MongoDB"
+    echo "12) Edit PostgreSQL settings & test dump"
+    echo "13) Ubah timezone"
+    echo "14) Ubah retention days"
+    echo "15) Ubah jadwal backup (OnCalendar helper)"
+    echo "16) Test backup sekarang"
+    echo "17) Restore dari backup"
+    echo "18) Rebuild / Repair installer files (service/timer/runner)"
+    echo "19) Encrypt latest backup (zip with password)"
+    echo "20) Restart service & timer"
+    echo "21) Simpan config"
+    echo "22) Status (service / last backup / next run)"
+    echo "23) Status Realtime (live monitor)"
     echo "0) Keluar (tanpa simpan)"
     echo "----------------------------------------------"
     read -p "Pilih menu: " opt
@@ -832,18 +1039,21 @@ while true; do
         6) add_mysql; pause ;;
         7) edit_mysql; pause ;;
         8) delete_mysql; pause ;;
-        9) edit_pg; pause ;;
-        10) read -p "Masukkan timezone (ex: Asia/Jakarta): " NEWTZ; TZ="$NEWTZ"; timedatectl set-timezone "$TZ"; echo "[OK] TZ set to $TZ"; pause ;;
-        11) read -p "Masukkan retention days: " RETENTION_DAYS; echo "[OK] Retention set to $RETENTION_DAYS"; pause ;;
-        12) build_oncalendar; pause ;;
-        13) test_backup; pause ;;
-        14) restore_backup; pause ;;
-        15) if confirm "Anda yakin ingin (re)build installer files?"; then rebuild_installer_files; fi; pause ;;
-        16) encrypt_last_backup; pause ;;
-        17) reload_systemd; pause ;;
-        18) save_config; pause ;;
-        19) show_status ;;
-        20) show_status_live ;;
+        9) add_mongo; pause ;;
+        10) edit_mongo; pause ;;
+        11) delete_mongo; pause ;;
+        12) edit_pg; pause ;;
+        13) read -p "Masukkan timezone (ex: Asia/Jakarta): " NEWTZ; TZ="$NEWTZ"; timedatectl set-timezone "$TZ"; echo "[OK] TZ set to $TZ"; pause ;;
+        14) read -p "Masukkan retention days: " RETENTION_DAYS; echo "[OK] Retention set to $RETENTION_DAYS"; pause ;;
+        15) build_oncalendar; pause ;;
+        16) test_backup; pause ;;
+        17) restore_backup; pause ;;
+        18) if confirm "Anda yakin ingin (re)build installer files?"; then rebuild_installer_files; fi; pause ;;
+        19) encrypt_last_backup; pause ;;
+        20) reload_systemd; pause ;;
+        21) save_config; pause ;;
+        22) show_status ;;
+        23) show_status_live ;;
         0) echo "Keluar tanpa menyimpan." ; break ;;
         *) echo "Pilihan tidak valid." ; sleep 1 ;;
     esac
@@ -874,4 +1084,3 @@ rm -- "$0" || true
 
 echo ""
 echo "Selesai. Ketik: menu-bot-backup"
-
