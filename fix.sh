@@ -440,6 +440,49 @@ confirm() {
     esac
 }
 
+toggle_mysql() {
+    echo "Status sekarang USE_MYSQL = $USE_MYSQL"
+    if confirm "Ubah status?"; then
+        if [[ "$USE_MYSQL" == "y" ]]; then
+            USE_MYSQL="n"
+        else
+            USE_MYSQL="y"
+        fi
+        save_config
+        echo "[OK] USE_MYSQL diubah menjadi: $USE_MYSQL"
+    fi
+    pause
+}
+
+toggle_mongo() {
+    echo "Status sekarang USE_MONGO = $USE_MONGO"
+    if confirm "Ubah status?"; then
+        if [[ "$USE_MONGO" == "y" ]]; then
+            USE_MONGO="n"
+        else
+            USE_MONGO="y"
+        fi
+        save_config
+        echo "[OK] USE_MONGO diubah menjadi: $USE_MONGO"
+    fi
+    pause
+}
+
+toggle_pg() {
+    echo "Status sekarang USE_PG = $USE_PG"
+    if confirm "Ubah status?"; then
+        if [[ "$USE_PG" == "y" ]]; then
+            USE_PG="n"
+        else
+            USE_PG="y"
+        fi
+        save_config
+        echo "[OK] USE_PG diubah menjadi: $USE_PG"
+    fi
+    pause
+}
+
+
 # ---------- Status Menu ----------
 show_status() {
     clear
@@ -778,21 +821,7 @@ edit_pg() {
 list_backups() {
     mkdir -p "$INSTALL_DIR/backups"
     ls -1tr "$INSTALL_DIR/backups" 2>/dev/null || echo "(tidak ada file backup)"
-}
-use_pg() {
-    echo "Mode database diubah menjadi PostgreSQL."
-    jq '.database.type="postgres"' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-}
 
-use_mongo() {
-    echo "Mode database diubah menjadi MongoDB."
-    jq '.database.type="mongo"' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-}
-
-use_mysql() {
-    echo "Mode database diubah menjadi MySQL."
-    jq '.database.type="mysql"' "$CONFIG_FILE" > /tmp/config.tmp && mv /tmp/config.tmp "$CONFIG_FILE"
-}
 
 restore_backup() {
     echo "Daftar file backup (urut waktu):"
