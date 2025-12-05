@@ -1086,8 +1086,8 @@ while true; do
 # ------------------- Inisialisasi variabel -----------------
 STATUS_SERVICE="${STATUS_SERVICE:-ACTIVE}"           # Status service, default ACTIVE
 NEXT_RUN="${NEXT_RUN:-Belum ada jadwal}"             # Jadwal backup berikutnya
-LAST_BACKUP="${LAST_BACKUP:-Tidak ada}"             # File backup terakhir
-TOTAL_BACKUP="${TOTAL_BACKUP:-0}"                   # Total backup
+LAST_BACKUP="${LAST_BACKUP:-Tidak ada}"              # File backup terakhir
+TOTAL_BACKUP="${TOTAL_BACKUP:-0}"                    # Total backup
 
 
 # ================== DASHBOARD ==================
@@ -1109,24 +1109,24 @@ TOTAL_BACKUP="${TOTAL_BACKUP:-0}"                   # Total backup
     echo " [7] Edit konfigurasi MySQL"
     echo " [8] Hapus konfigurasi MySQL"
     echo " [9] Tambah konfigurasi MongoDB"
-    echo " 10) Edit konfigurasi MongoDB"
-    echo " 11) Hapus konfigurasi MongoDB"
-    echo " 12) Edit PostgreSQL settings & test dump"
-    echo " 13) Ubah timezone"
-    echo " 14) Ubah retention days"
-    echo " 15) Ubah jadwal backup (OnCalendar helper)"
-    echo " 16) Test backup sekarang"
-    echo " 17) Restore dari backup"
-    echo " 18) Rebuild / Repair installer files (service/timer/runner)"
-    echo " 19) Encrypt latest backup (zip with password)"
-    echo " 20) Restart service & timer"
-    echo " 21) Simpan config"
-    echo " 22) Status (service / last backup / next run)"
-    echo " 23) Status Realtime (live monitor)"
-    echo " 24) Gunakan MySQL (use_mysql)"
-    echo " 25) Gunakan MongoDB (use_mongo)"
-    echo " 26) Gunakan PostgreSQL (use_pg)"
-    echo " 0) Keluar (tanpa simpan)"
+    echo " [10] Edit konfigurasi MongoDB"
+    echo " [11] Hapus konfigurasi MongoDB"
+    echo " [12] Edit PostgreSQL settings & test dump"
+    echo " [13] Ubah timezone"
+    echo " [14] Ubah retention days"
+    echo " [15] Ubah jadwal backup (OnCalendar helper)"
+    echo " [16] Test backup sekarang"
+    echo " [17] Restore dari backup"
+    echo " [18] Rebuild / Repair installer files (service/timer/runner)"
+    echo " [19] Encrypt latest backup (zip with password)"
+    echo " [20] Restart service & timer"
+    echo " [21] Simpan config"
+    echo " [22] Status (service / last backup / next run)"
+    echo " [23] Status Realtime (live monitor)"
+    echo " [24] Gunakan MySQL (use_mysql)"
+    echo " [25] Gunakan MongoDB (use_mongo)"
+    echo " [26] Gunakan PostgreSQL (use_pg)"
+    echo " [0] Keluar (tanpa simpan)"
     echo "----------------------------------------------"
     read -p "Pilih menu: " opt
 
