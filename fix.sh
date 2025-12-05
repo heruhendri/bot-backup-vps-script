@@ -781,7 +781,7 @@ edit_pg() {
 list_backups() {
     mkdir -p "$INSTALL_DIR/backups"
     ls -1tr "$INSTALL_DIR/backups" 2>/dev/null || echo "(tidak ada file backup)"
-
+}
 
 restore_backup() {
     echo "Daftar file backup (urut waktu):"
