@@ -440,6 +440,9 @@ confirm() {
     esac
 }
 
+
+
+
 # ---------- Status Menu ----------
 show_status() {
     clear
@@ -995,6 +998,79 @@ test_backup() {
     echo "Selesai. Periksa Telegram / $INSTALL_DIR/backups"
 }
 
+toggle_mysql() {
+    echo "Status sekarang USE_MYSQL = $USE_MYSQL"
+    read -p "Aktifkan MySQL? (y/n): " jawab
+
+    case "$jawab" in
+        y|Y)
+            USE_MYSQL="y"
+            echo "[OK] MySQL DI-AKTIFKAN."
+            ;;
+        n|N)
+            USE_MYSQL="n"
+            echo "[OK] MySQL DI-MATIKAN."
+            ;;
+        *)
+            echo "Input tidak valid. Gunakan y atau n."
+            pause
+            return
+            ;;
+    esac
+
+    save_config
+    pause
+}
+
+toggle_mongo() {
+    echo "Status sekarang USE_MONGO = $USE_MONGO"
+    read -p "Aktifkan MongoDB? (y/n): " jawab
+
+    case "$jawab" in
+        y|Y)
+            USE_MONGO="y"
+            echo "[OK] MongoDB DI-AKTIFKAN."
+            ;;
+        n|N)
+            USE_MONGO="n"
+            echo "[OK] MongoDB DI-MATIKAN."
+            ;;
+        *)
+            echo "Input tidak valid. Gunakan y atau n."
+            pause
+            return
+            ;;
+    esac
+
+    save_config
+    pause
+}
+
+toggle_pg() {
+    echo "Status sekarang USE_PG = $USE_PG"
+    read -p "Aktifkan PostgreSQL? (y/n): " jawab
+
+    case "$jawab" in
+        y|Y)
+            USE_PG="y"
+            echo "[OK] PostgreSQL DI-AKTIFKAN."
+            ;;
+        n|N)
+            USE_PG="n"
+            echo "[OK] PostgreSQL DI-MATIKAN."
+            ;;
+        *)
+            echo "Input tidak valid. Gunakan y atau n."
+            pause
+            return
+            ;;
+    esac
+
+    save_config
+    pause
+}
+
+
 # Main menu
 while true; do
     clear
@@ -1026,6 +1102,9 @@ while true; do
     echo "21) Simpan config"
     echo "22) Status (service / last backup / next run)"
     echo "23) Status Realtime (live monitor)"
+    echo "24) Gunakan MySQL (use_mysql)"
+    echo "25) Gunakan MongoDB (use_mongo)"
+    echo "26) Gunakan PostgreSQL (use_pg)"
     echo "0) Keluar (tanpa simpan)"
     echo "----------------------------------------------"
     read -p "Pilih menu: " opt
@@ -1054,6 +1133,9 @@ while true; do
         21) save_config; pause ;;
         22) show_status ;;
         23) show_status_live ;;
+        24) toggle_mysql ;;
+        25) toggle_mongo ;;
+        26) toggle_pg ;;
         0) echo "Keluar tanpa menyimpan." ; break ;;
         *) echo "Pilihan tidak valid." ; sleep 1 ;;
     esac
