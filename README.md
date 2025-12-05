@@ -90,7 +90,7 @@ Di dalamnya ada:
 Jalankan installer:
 
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/master/install-backupvps-telegram.sh)
+bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/update-tampilan/install-backupvps-telegram.sh)
 ```
 
 Atau versi branch (menu realtime):

@@ -1074,11 +1074,22 @@ toggle_pg() {
 # Main menu
 while true; do
     clear
-    echo "$WATERMARK_HEADER"
-    echo ""
-    echo "=============================================="
-    echo "   AUTO BACKUP — MENU PRO (Telegram VPS)"
-    echo "=============================================="
+# ================== WARNA ==================
+    CYAN="\e[96m"
+    GREEN="\e[32m"
+    RESET="\e[0m"
+
+# ================== DASHBOARD ==================
+    echo -e "${CYAN}==================== BACKUP DASHBOARD ====================${RESET}"
+    echo -e "${CYAN}=======================  BY HENDRI =======================${RESET}"
+    echo -e "${CYAN}==================== BACKUP DASHBOARD ====================${RESET}"
+    echo
+    echo -e " Status Service   : ${GREEN}${STATUS_SERVICE}${RESET}"
+    echo -e " Next Schedule    : ${NEXT_SCHEDULE}"
+    echo -e " Last Backup File : ${LAST_BACKUP}"
+    echo -e " Total Backup     : ${TOTAL_BACKUP}"
+    echo
+    echo "---------------------- MENU AKSI ---------------------------"
     echo "1) Lihat konfigurasi"
     echo "2) Edit BOT TOKEN"
     echo "3) Edit CHAT ID"
