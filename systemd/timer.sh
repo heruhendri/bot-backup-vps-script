@@ -8,7 +8,7 @@ CRON_TIME="${1:-}"
 
 if [[ -z "$CRON_TIME" ]]; then
     echo "[ERROR] Tidak ada jadwal OnCalendar diberikan."
-    echo "Usage: timer.sh \"*-*-* 03:00:00\""
+    echo "Usage: timer.sh "*-*-* 03:00:00""
     exit 1
 fi
 
