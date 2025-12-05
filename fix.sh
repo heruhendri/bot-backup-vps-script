@@ -1000,45 +1000,76 @@ test_backup() {
 
 toggle_mysql() {
     echo "Status sekarang USE_MYSQL = $USE_MYSQL"
-    if confirm "Ubah status?"; then
-        if [[ "$USE_MYSQL" == "y" ]]; then
-            USE_MYSQL="n"
-        else
+    read -p "Aktifkan MySQL? (y/n): " jawab
+
+    case "$jawab" in
+        y|Y)
             USE_MYSQL="y"
-        fi
-        save_config
-        echo "[OK] USE_MYSQL diubah menjadi: $USE_MYSQL"
-    fi
+            echo "[OK] MySQL DI-AKTIFKAN."
+            ;;
+        n|N)
+            USE_MYSQL="n"
+            echo "[OK] MySQL DI-MATIKAN."
+            ;;
+        *)
+            echo "Input tidak valid. Gunakan y atau n."
+            pause
+            return
+            ;;
+    esac
+
+    save_config
     pause
 }
 
 toggle_mongo() {
     echo "Status sekarang USE_MONGO = $USE_MONGO"
-    if confirm "Ubah status?"; then
-        if [[ "$USE_MONGO" == "y" ]]; then
-            USE_MONGO="n"
-        else
+    read -p "Aktifkan MongoDB? (y/n): " jawab
+
+    case "$jawab" in
+        y|Y)
             USE_MONGO="y"
-        fi
-        save_config
-        echo "[OK] USE_MONGO diubah menjadi: $USE_MONGO"
-    fi
+            echo "[OK] MongoDB DI-AKTIFKAN."
+            ;;
+        n|N)
+            USE_MONGO="n"
+            echo "[OK] MongoDB DI-MATIKAN."
+            ;;
+        *)
+            echo "Input tidak valid. Gunakan y atau n."
+            pause
+            return
+            ;;
+    esac
+
+    save_config
     pause
 }
 
 toggle_pg() {
     echo "Status sekarang USE_PG = $USE_PG"
-    if confirm "Ubah status?"; then
-        if [[ "$USE_PG" == "y" ]]; then
-            USE_PG="n"
-        else
+    read -p "Aktifkan PostgreSQL? (y/n): " jawab
+
+    case "$jawab" in
+        y|Y)
             USE_PG="y"
-        fi
-        save_config
-        echo "[OK] USE_PG diubah menjadi: $USE_PG"
-    fi
+            echo "[OK] PostgreSQL DI-AKTIFKAN."
+            ;;
+        n|N)
+            USE_PG="n"
+            echo "[OK] PostgreSQL DI-MATIKAN."
+            ;;
+        *)
+            echo "Input tidak valid. Gunakan y atau n."
+            pause
+            return
+            ;;
+    esac
+
+    save_config
     pause
 }
+
 
 # Main menu
 while true; do
