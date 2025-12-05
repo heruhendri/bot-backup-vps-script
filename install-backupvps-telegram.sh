@@ -293,14 +293,18 @@ fi
 
 tar -czf "$FILE" -C "$TMP_DIR" . || (echo "[ERROR] tar failed"; exit 1)
 
+# Ambil nama VPS
+VPS_NAME=$(hostname 2>/dev/null || echo "Unknown-VPS")
+
 # send to telegram (document)
 if [[ -n "${BOT_TOKEN:-}" && -n "${CHAT_ID:-}" ]]; then
     curl -s -F document=@"$FILE" \
-         -F caption="Backup selesai: $(basename "$FILE")" \
+         -F caption="Backup selesai dari VPS: ${VPS_NAME}\nFile: $(basename "$FILE")" \
          "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}" || true
 else
     echo "[WARN] BOT_TOKEN/CHAT_ID kosong; melewatkan kirim ke Telegram"
 fi
+
 
 # cleanup temp
 rm -rf "$TMP_DIR"
