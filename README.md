@@ -94,7 +94,7 @@ Saat menjalankan:
 menu-bot-backup
 ```
 
-[Tampilan dashboard baru:](https://github.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/blob/update-tampilan/dash.png)
+[Tampilan dashboard baru:](https://github.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/blob/master/dash.png)
 
 ```
 ========== BACKUP DASHBOARD BY HENDRI ==========
@@ -156,7 +156,7 @@ menu-bot-backup
 Jalankan installer:
 
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/update-tampilan/install-backupvps-telegram.sh)
+bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/master/install-backupvps-telegram.sh)
 ```
 
 Atau versi branch terbaru:
