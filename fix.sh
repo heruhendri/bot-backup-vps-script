@@ -1102,9 +1102,9 @@ while true; do
         21) save_config; pause ;;
         22) show_status ;;
         23) show_status_live ;;
-        24) use_mysql ;;
-        25) use_mongo ;;
-        26) use_pg ;;
+        24) toggle_mysql ;;
+        25) toggle_mongo ;;
+        26) toggle_pg ;;
         0) echo "Keluar tanpa menyimpan." ; break ;;
         *) echo "Pilihan tidak valid." ; sleep 1 ;;
     esac
