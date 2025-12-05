@@ -1080,11 +1080,10 @@ while true; do
     RESET="\e[0m"
 
 # ================== DASHBOARD ==================
-    echo -e "${CYAN}==================== BACKUP DASHBOARD ====================${RESET}"
-    echo -e "${CYAN}=======================  BY HENDRI =======================${RESET}"
-    echo -e "${CYAN}==================== BACKUP DASHBOARD ====================${RESET}"
+
+    echo -e "${CYAN}========== BACKUP DASHBOARD BY HENDRI ==========${RESET}"
     echo
-    echo -e " Status Service   : ${GREEN}${STATUS_SERVICE}${RESET}"
+    echo -e " Status Service   : ${GREEN}${svc_active}${RESET}"
     echo -e " Next Schedule    : ${NEXT_SCHEDULE}"
     echo -e " Last Backup File : ${LAST_BACKUP}"
     echo -e " Total Backup     : ${TOTAL_BACKUP}"
