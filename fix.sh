@@ -998,16 +998,19 @@ test_backup() {
     echo "Selesai. Periksa Telegram / $INSTALL_DIR/backups"
 }
 
-use_mysql() {
-    if [[ "$USE_MYSQL" == "yes" ]]; then
-        USE_MYSQL="no"
-        echo "MySQL dinonaktifkan."
-    else
-        USE_MYSQL="yes"
-        echo "MySQL diaktifkan."
+toggle_mysql() {
+    echo "Status sekarang USE_MYSQL = $USE_MYSQL"
+    if confirm "Ubah status?"; then
+        if [[ "$USE_MYSQL" == "y" ]]; then
+            USE_MYSQL="n"
+        else
+            USE_MYSQL="y"
+        fi
+        save_config
+        echo "[OK] USE_MYSQL diubah menjadi: $USE_MYSQL"
     fi
+    pause
 }
-
 
 toggle_mongo() {
     echo "Status sekarang USE_MONGO = $USE_MONGO"
@@ -1099,7 +1102,7 @@ while true; do
         21) save_config; pause ;;
         22) show_status ;;
         23) show_status_live ;;
-        24) use_mysql ;;
+        24) toggle_mysql ;;
         25) toggle_mongo ;;
         26) toggle_pg ;;
         0) echo "Keluar tanpa menyimpan." ; break ;;
