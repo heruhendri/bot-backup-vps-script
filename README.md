@@ -93,11 +93,11 @@ Jalankan installer:
 bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/master/install-backupvps-telegram.sh)
 ```
 
-<!-- Atau versi branch (menu realtime):
+Atau versi branch (menu realtime):
 
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/menu-status-realtime/install-backupvps-telegram.sh)
-``` -->
+bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/master/fix.sh)
+```
 
 Installer akan menanyakan:
 
