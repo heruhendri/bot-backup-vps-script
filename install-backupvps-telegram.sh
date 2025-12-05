@@ -293,6 +293,9 @@ fi
 
 tar -czf "$FILE" -C "$TMP_DIR" . || (echo "[ERROR] tar failed"; exit 1)
 
+START_TIME=$(date +%s)
+
+
 # =========================================
 #  WAKTU MULAI (buat jika belum ada)
 # =========================================
