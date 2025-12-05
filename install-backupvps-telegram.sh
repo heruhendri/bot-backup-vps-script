@@ -1073,18 +1073,50 @@ toggle_pg() {
 # Main menu
 while true; do
     clear
-# ================== WARNA ==================
-CYAN="\e[96m"
-GREEN="\e[32m"
-BLUE="\e[94m"
-YELLOW="\e[93m"
-RED="\e[91m"
-RESET="\e[0m"
-# ------------------- Inisialisasi variabel -----------------
-STATUS_SERVICE="${STATUS_SERVICE:-ACTIVE}"           # Status service, default ACTIVE
-NEXT_RUN="${NEXT_RUN:-Belum ada jadwal}"             # Jadwal backup berikutnya
-LAST_BACKUP="${LAST_BACKUP:-Tidak ada}"              # File backup terakhir
-TOTAL_BACKUP="${TOTAL_BACKUP:-0}"                    # Total backup
+# Fungsi untuk ambil status service
+get_status_service() {
+    # Contoh: cek service backup aktif atau tidak
+    if systemctl is-active --quiet auto-backup.service; then
+        echo "ACTIVE"
+    else
+        echo "INACTIVE"
+    fi
+}
+
+# Fungsi untuk ambil jadwal berikutnya
+get_next_schedule() {
+    # Contoh: ambil jadwal systemd timer (ubah sesuai timer kamu)
+    NEXT=$(systemctl list-timers --no-legend auto-backup.timer | awk 'NR==1 {print $1, $2}')
+    if [[ -z "$NEXT" ]]; then
+        echo "Belum ada jadwal"
+    else
+        echo "$NEXT"
+    fi
+}
+
+# Fungsi untuk ambil backup terakhir
+get_last_backup() {
+    LAST=$(ls -t /opt/auto-backup/backups/*.tar.gz 2>/dev/null | head -n1)
+    if [[ -z "$LAST" ]]; then
+        echo "Tidak ada"
+    else
+        echo "$(basename "$LAST")"
+    fi
+}
+
+# Fungsi untuk hitung total backup
+get_total_backup() {
+    COUNT=$(ls /opt/auto-backup/backups/*.tar.gz 2>/dev/null | wc -l)
+    echo "${COUNT:-0}"
+}
+
+# ===================== LOOP REALTIME =====================
+while true; do
+    clear
+    STATUS_SERVICE=$(get_status_service)
+    NEXT_RUN=$(get_next_schedule)
+    LAST_BACKUP=$(get_last_backup)
+    TOTAL_BACKUP=$(get_total_backup)
 
 
 # ================== DASHBOARD ==================
