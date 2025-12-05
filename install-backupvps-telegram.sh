@@ -1107,7 +1107,13 @@ get_total_backup() {
     echo "${COUNT:-0}"
 }
 
-
+# ===================== WARNA =====================
+BLUE="\e[96m"
+GREEN="\e[92m"
+YELLOW="\e[93m"
+RED="\e[91m"
+CYAN="\e[36m"
+RESET="\e[0m"
 
 # ===================== LOOP REALTIME =====================
 while true; do
@@ -1120,14 +1126,14 @@ while true; do
 
 # ================== DASHBOARD ==================
 
-    echo -e "${CYAN}========== BACKUP DASHBOARD BY HENDRI ==========${RESET}"
+echo -e "${CYAN}========== BACKUP DASHBOARD BY HENDRI ==========${RESET}"
 echo ""
 echo -e " Status Service   : ${GREEN}${STATUS_SERVICE}${RESET}"
 echo -e " Next Schedule    : ${YELLOW}${NEXT_RUN}${RESET}"
 echo -e " Last Backup File : ${RED}${LAST_BACKUP}${RESET}"
 echo -e " Total Backup     : ${BLUE}${TOTAL_BACKUP}${RESET}"
 echo ""
-    echo "---------------------- MENU AKSI ---------------------------"
+echo "---------------------- MENU AKSI ---------------------------"
 echo -e "${BLUE}[1]  Lihat konfigurasi${RESET}"
 echo -e "${YELLOW}[2]  Edit BOT TOKEN${RESET}"
 echo -e "${YELLOW}[3]  Edit CHAT ID${RESET}"
