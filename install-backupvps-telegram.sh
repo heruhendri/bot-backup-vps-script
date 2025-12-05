@@ -293,17 +293,54 @@ fi
 
 tar -czf "$FILE" -C "$TMP_DIR" . || (echo "[ERROR] tar failed"; exit 1)
 
-# Ambil nama VPS
-VPS_NAME=$(hostname 2>/dev/null || echo "Unknown-VPS")
+# =========================================
+#  WAKTU MULAI (buat jika belum ada)
+# =========================================
+: "${START_TIME:=$(date +%s)}"
 
-# send to telegram (document)
+# =========================================
+#  GATHER INFO
+# =========================================
+VPS_NAME=$(hostname 2>/dev/null || echo "Unknown-VPS")
+BACKUP_NAME=$(basename "$FILE")
+
+# Waktu sekarang
+NOW="$(date '+%Y-%m-%d %H:%M:%S')"
+
+# Hitung durasi
+END_TIME=$(date +%s)
+DURATION=$((END_TIME - START_TIME))
+
+# Ukuran file
+FILE_SIZE=$(du -h "$FILE" | awk '{print $1}')
+
+# =========================================
+#  CAPTION MARKDOWN
+# =========================================
+read -r -d '' CAPTION <<EOF
+📦 **Backup Selesai!**
+
+**🖥️ VPS:** \`${VPS_NAME}\`
+**📄 File:** \`${BACKUP_NAME}\`
+**📅 Waktu:** ${NOW}
+**⏳ Durasi:** ${DURATION}s
+**📦 Ukuran:** ${FILE_SIZE}
+
+Terima kasih telah menggunakan sistem backup otomatis. 🚀
+EOF
+
+# =========================================
+#  SEND TELEGRAM
+# =========================================
 if [[ -n "${BOT_TOKEN:-}" && -n "${CHAT_ID:-}" ]]; then
     curl -s -F document=@"$FILE" \
-         -F caption="Backup selesai dari VPS: ${VPS_NAME}\nFile: $(basename "$FILE")" \
+         -F parse_mode="Markdown" \
+         -F caption="$CAPTION" \
          "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}" || true
 else
     echo "[WARN] BOT_TOKEN/CHAT_ID kosong; melewatkan kirim ke Telegram"
 fi
+
 
 
 # cleanup temp
