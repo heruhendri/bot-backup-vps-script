@@ -94,7 +94,7 @@ Saat menjalankan:
 menu-bot-backup
 ```
 
-[Tampilan dashboard baru:](https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/refs/heads/update-tampilan/dash.png)
+[Tampilan dashboard baru:](https://github.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/blob/update-tampilan/dash.png)
 
 ```
 ========== BACKUP DASHBOARD BY HENDRI ==========
