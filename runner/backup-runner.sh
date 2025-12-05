@@ -186,10 +186,7 @@ log "Archive dibuat: $ARCHIVE"
 if [[ -n "$BOT_TOKEN" && -n "$CHAT_ID" ]]; then
     if command -v curl >/dev/null 2>&1; then
         # use multipart/form-data
-        curl -s -F document=@"$ARCHIVE" \
-             -F caption="Backup selesai: $(basename "$ARCHIVE")" \
-             "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}" \
-             >/dev/null 2>&1 || log "Warn: gagal kirim ke Telegram (curl error)"
+        curl -s -F document=@"$ARCHIVE"              -F caption="Backup selesai: $(basename "$ARCHIVE")"              "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}"              >/dev/null 2>&1 || log "Warn: gagal kirim ke Telegram (curl error)"
         log "Mengirim ke Telegram: selesai (attempted)."
     else
         log "Warn: curl tidak tersedia. Tidak dapat mengirim ke Telegram."
