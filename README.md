@@ -1,11 +1,12 @@
 
+
 # 📦 **bot-backup-vps-script**
 
 ![License](https://img.shields.io/github/license/heruhendri/bot-backup-vps-script)
 ![Stars](https://img.shields.io/github/stars/heruhendri/bot-backup-vps-script?style=social)
 ![Forks](https://img.shields.io/github/forks/heruhendri/bot-backup-vps-script?style=social)
 ![Issues](https://img.shields.io/github/issues/heruhendri/bot-backup-vps-script)
-![Version](https://img.shields.io/badge/version-3.0.0-blue)
+![Version](https://img.shields.io/badge/version-3.1.0-blue)
 
 ---
 
@@ -16,6 +17,7 @@ Script ini membuat sistem **backup otomatis VPS** dengan fitur lengkap:
 * Backup folder
 * Backup MySQL (multi-host, multi-user, multi-database)
 * Backup PostgreSQL
+* **Backup MongoDB (multi-account, multi-host, multi-database) — NEW**
 * Notifikasi Telegram (sendDocument)
 * systemd service + timer (OnCalendar)
 * Menu PRO untuk edit konfigurasi
@@ -24,6 +26,8 @@ Script ini membuat sistem **backup otomatis VPS** dengan fitur lengkap:
 * Rebuild sistem service/timer/runner
 * Encrypt backup (ZIP + password)
 * Auto delete file lama (retention)
+* **Toggle database (use_mysql / use_pg / use_mongo) — NEW**
+* **Dashboard status baru — NEW**
 
 ---
 
@@ -32,56 +36,118 @@ Script ini membuat sistem **backup otomatis VPS** dengan fitur lengkap:
 ### 🔥 Backup Lengkap dan Fleksibel
 
 * Backup banyak folder sekaligus (comma separated)
-* MySQL multi config:
+
+* **MySQL multi config:**
 
   * multi user
   * multi host
   * database ALL atau list DB
   * format: `user:pass@host:db1,db2`
+
+* **MongoDB multi config — NEW**
+
+  * multi database
+  * multi host
+  * format:
+
+    ```
+    user:pass@host:27017/db1,db2
+    ```
+  * atau mode ALL:
+
+    ```
+    mongodb://user:pass@host:27017/all
+    ```
+
 * PostgreSQL full backup (`pg_dumpall`)
 
-### 🔔 Notifikasi Telegram
+* Dapat mengaktifkan/nonaktifkan setiap database lewat menu:
+
+  * use_mysql
+  * use_mongo
+  * use_pg
+
+---
+
+# 🔔 Notifikasi Telegram
 
 * Backup dikirim ke Telegram sebagai file
-* Caption otomatis
+* Nama file + ukuran + waktu otomatis
+* Mendukung caption lengkap
 
-### ⚙️ Otomatis dan Stabil
+---
+
+# ⚙️ Otomatis dan Stabil
 
 * Menggunakan systemd service + timer
-* Jadwal memakai format OnCalendar
-* Timezone di-set otomatis saat instalasi
+* Jadwal OnCalendar lengkap
+* Timezone otomatis disesuaikan saat instalasi
+* Rebuild otomatis jika ada file rusak
 
-### 🛠 Menu PRO
+---
 
-Script menyediakan menu canggih:
+# 🛠 Menu PRO (Dashboard Baru)
+
+Saat menjalankan:
 
 ```
 menu-bot-backup
 ```
 
-Di dalamnya ada:
+[Tampilan dashboard baru:](https://github.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/blob/master/dash.png)
 
-* Edit BOT TOKEN / CHAT ID
-* Tambah / hapus folder
-* Tambah / edit / hapus MySQL config
-* Edit PostgreSQL + test dump
-* Edit timezone
-* Edit retention
-* Edit jadwal OnCalendar
-* Test backup langsung
-* Restore dari backup
-* Encrypt latest backup
-* Rebuild service / timer / runner
-* Status statis
-* Status realtime (refresh per detik)
-* Save config
-* Restart service & timer
+```
+========== BACKUP DASHBOARD BY HENDRI ==========
 
-### 🔒 Keamanan
+ Status Service   : INACTIVE
+ Next Schedule    : Sat 2025-12-06
+ Last Backup File : backup-2025-12-06-0110.tar.gz
+ Total Backup     : 10
+```
 
-* Config disimpan di `/opt/auto-backup/config.conf`
+---
+
+# 📋 **MENU AKSI LENGKAP (VERSI BARU)**
+
+```
+---------------------- MENU AKSI ---------------------------
+[1]  Lihat konfigurasi
+[2]  Edit BOT TOKEN
+[3]  Edit CHAT ID
+[4]  Tambah folder backup
+[5]  Hapus folder backup
+[6]  Tambah konfigurasi MySQL
+[7]  Edit konfigurasi MySQL
+[8]  Hapus konfigurasi MySQL
+[9]  Tambah konfigurasi MongoDB
+[10] Edit konfigurasi MongoDB
+[11] Hapus konfigurasi MongoDB
+[12] Edit PostgreSQL settings & test dump
+[13] Ubah timezone
+[14] Ubah retention days
+[15] Ubah jadwal backup (OnCalendar helper)
+[16] Test backup sekarang
+[17] Restore dari backup
+[18] Rebuild / Repair installer files (service/timer/runner)
+[19] Encrypt latest backup (zip with password)
+[20] Restart service & timer
+[21] Simpan config
+[22] Status (service / last backup / next run)
+[23] Status Realtime (live monitor)
+[24] Gunakan MySQL (use_mysql)
+[25] Gunakan MongoDB (use_mongo)
+[26] Gunakan PostgreSQL (use_pg)
+[0]  Keluar (tanpa simpan)
+```
+
+---
+
+# 🔒 **Keamanan**
+
+* Config disimpan di:
+  `/opt/auto-backup/config.conf`
 * Permission otomatis `chmod 600`
-* Password tidak ditampilkan saat input
+* Password MySQL, PostgreSQL, MongoDB tidak ditampilkan
 
 ---
 
@@ -93,30 +159,11 @@ Jalankan installer:
 bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/master/install-backupvps-telegram.sh)
 ```
 
-Atau versi branch (menu realtime):
+Atau versi branch terbaru:
 
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/master/fix.sh)
 ```
-
-Installer akan menanyakan:
-
-* Bot token
-* Chat ID
-* Folder backup
-* MySQL? (y/n)
-* PostgreSQL? (y/n)
-* Multi konfigurasi MySQL
-* Retention (hari)
-* Timezone
-* Jadwal systemd timer (OnCalendar)
-
-Setelah selesai:
-
-- ✔ Service dibuat — `auto-backup.service`
-- ✔ Timer aktif — `auto-backup.timer`
-- ✔ Backup pertama langsung berjalan
-- ✔ Installer menghapus dirinya sendiri
 
 ---
 
@@ -124,35 +171,24 @@ Setelah selesai:
 
 Akses menu:
 
-```bash
+```
 menu-bot-backup
 ```
 
-Menu lengkap:
+Menu berisi:
 
-```
-1) Lihat konfigurasi
-2) Edit BOT TOKEN
-3) Edit CHAT ID
-4) Tambah folder backup
-5) Hapus folder backup
-6) Tambah konfigurasi MySQL
-7) Edit konfigurasi MySQL
-8) Hapus konfigurasi MySQL
-9) Edit PostgreSQL settings + test dump
-10) Ubah timezone
-11) Ubah retention days
-12) Ubah jadwal OnCalendar
-13) Test backup sekarang
-14) Restore dari backup
-15) Rebuild installer files
-16) Encrypt latest backup
-17) Restart service & timer
-18) Save config
-19) Status statis
-20) Status realtime
-0) Keluar
-```
+* Edit token/chat id
+* Manajemen folder
+* Manajemen MySQL
+* Manajemen PostgreSQL
+* **Manajemen MongoDB (baru)**
+* Test backup
+* Restore
+* Encrypt ZIP
+* Rebuild runner/service/timer
+* Status & status realtime
+* Toggle database
+* Save config
 
 ---
 
@@ -161,25 +197,27 @@ Menu lengkap:
 ```mermaid
 flowchart TD
     A[VPS Server] --> B[Backup Runner]
+
     A --> C[MySQL Dump]
     A --> D[PostgreSQL Dump]
+    A --> E[MongoDB Dump]
 
-    B --> E[Create Archive]
-    E --> F[Backup Folder]
+    B --> F[Create Archive]
+    F --> G[Backup Folder]
+    G --> H[Send to Telegram]
 
-    F --> G[Send to Telegram]
+    I[Systemd Timer] --> B
+    J[Systemd Service] --> B
 
-    H[Systemd Timer] --> B
-    I[Systemd Service] --> B
+    K[Menu PRO] --> L[Edit config.conf]
+    K --> M[Rebuild System]
 
-    J[Menu PRO] --> K[Edit config.conf]
-    J --> L[Rebuild System]
-
-    K --> B
     L --> B
-
+    M --> B
 ```
+
 ---
+
 # 🚲 **ALUR BACKUP SYSTEM**
 
 ```mermaid
@@ -189,13 +227,19 @@ flowchart TD
     Load --> Tmp[Create Temp Dir]
 
     Tmp --> Copy[Copy Folders]
-    Copy --> MySQL{Use MySQL?}
 
+    Copy --> MySQL{Use MySQL?}
     MySQL -->|Yes| DumpMySQL[Dump MySQL]
     MySQL -->|No| SkipMySQL[Skip]
 
-    DumpMySQL --> PG{Use PostgreSQL?}
-    SkipMySQL --> PG
+    DumpMySQL --> Mongo{Use MongoDB?}
+    SkipMySQL --> Mongo
+
+    Mongo -->|Yes| DumpMongo[Dump MongoDB]
+    Mongo -->|No| SkipMongo[Skip]
+
+    DumpMongo --> PG{Use PostgreSQL?}
+    SkipMongo --> PG
 
     PG -->|Yes| DumpPG[Dump PostgreSQL]
     PG -->|No| SkipPG[Skip]
@@ -214,47 +258,43 @@ flowchart TD
     Clean --> Retention[Delete Old Backups]
 
     Retention --> End([Done])
-
-
 ```
 ---
 
 # 📂 **STRUKTUR DIREKTORI**
 
-| Path                                      | Deskripsi                               |
-| ----------------------------------------- | --------------------------------------- |
-| `/opt/auto-backup/config.conf`            | File konfigurasi utama                  |
-| `/opt/auto-backup/backup-runner.sh`       | Script inti backup                      |
-| `/opt/auto-backup/menu.sh`                | Menu PRO                                |
-| `/usr/bin/menu-bot-backup`                | Symlink global ke menu                  |
-| `/opt/auto-backup/backups/`               | Folder hasil backup                     |
-| `/etc/systemd/system/auto-backup.service` | Service backup                          |
-| `/etc/systemd/system/auto-backup.timer`   | Timer OnCalendar                        |
-| `install-backupvps-telegram.sh`           | Installer (auto delete setelah selesai) |
+| Path                                      | Deskripsi               |
+| ----------------------------------------- | ----------------------- |
+| `/opt/auto-backup/config.conf`            | File konfigurasi utama  |
+| `/opt/auto-backup/backup-runner.sh`       | Script backup inti      |
+| `/opt/auto-backup/menu.sh`                | Menu PRO                |
+| `/usr/bin/menu-bot-backup`                | Symlink global          |
+| `/opt/auto-backup/backups/`               | Folder backup           |
+| `/etc/systemd/system/auto-backup.service` | Service backup          |
+| `/etc/systemd/system/auto-backup.timer`   | Timer OnCalendar        |
+| `install-backupvps-telegram.sh`           | Installer (auto delete) |
 
 ---
 
 # 📝 **PENJELASAN SCRIPT UTAMA**
 
-## 1️⃣ **Installer (`install-backupvps-telegram.sh`)**
+## 1️⃣ **Installer**
 
 Fungsi:
 
-* Input seluruh parameter backup
-* Buat folder installer
-* Buat config
-* Buat backup-runner
-* Buat systemd service
-* Buat systemd timer
-* Install menu PRO
-* Jalankan backup pertama
-* Hapus installer otomatis
+* Input parameter
+* Generate semua file
+* Setup config
+* Setup runner
+* Setup service & timer
+* Backup pertama langsung berjalan
+* Hapus dirinya sendiri
 
-## 2️⃣ **Menu PRO (`menu.sh`)**
+---
 
-Fungsi besar:
+## 2️⃣ **Menu PRO (Lengkap)**
 
-### 👍 Management Backup Folder
+### 👍 Management Folder
 
 * tambah
 * hapus
@@ -262,27 +302,41 @@ Fungsi besar:
 ### 👍 Management MySQL
 
 * multi konfigurasi
-* edit & delete
-* format:
-  `user:password@host:DB1,DB2`
-  atau `all`
+* edit
+* delete
+
+Format:
+
+```
+user:password@host:DB1,DB2
+```
+
+### 👍 Management MongoDB — NEW
+
+* tambah konfigurasi
+* edit
+* delete
+* test dump
+* support ALL DB
+
+Format:
+
+```
+user:pass@host:27017/db1,db2
+```
 
 ### 👍 PostgreSQL
 
 * enable/disable
-* test dump otomatis
+* test dump `pg_dumpall`
 
-### 👍 Management Sistem
+### 👍 Sistem
 
 * timezone
 * retention
 * jadwal OnCalendar
-
-### 👍 Rebuild System
-
-* perbaiki runner
-* rebuild service
-* rebuild timer
+* restart service/timer
+* rebuild file corrupt
 
 ### 👍 Backup & Restore
 
@@ -292,40 +346,47 @@ Fungsi besar:
 
 ### 👍 Status
 
-* status biasa
-* status realtime (auto refresh 1 detik)
+* status lengkap
+* status realtime (refresh 1 detik)
 
-## 3️⃣ **Backup Runner (`backup-runner.sh`)**
+### 👍 Toggle Database — NEW
+
+* use_mysql on/off
+* use_mongo on/off
+* use_pg on/off
+
+---
+
+## 3️⃣ **Backup Runner**
 
 Melakukan:
 
-* backup folder
-* backup mysql multi config
-* backup postgres
+* copy folder
+* dump MySQL
+* dump PostgreSQL
+* dump MongoDB — NEW
 * compress tar.gz
-* kirim ke Telegram
-* delete tempo
-* delete file lama sesuai retention
+* kirim Telegram
+* hapus temp
+* hapus file lama sesuai retention
+
+---
+
+# 🔐 **ENCRYPT BACKUP**
+
+Tersedia di menu:
+
+```
+Encrypt latest backup
+```
 
 ---
 
 # 🧪 **TEST SERVICE**
 
-Cek service:
-
 ```
 systemctl status auto-backup
-```
-
-Jalankan manual:
-
-```
 systemctl start auto-backup
-```
-
-Cek timer:
-
-```
 systemctl list-timers | grep auto-backup
 ```
 
@@ -333,45 +394,19 @@ systemctl list-timers | grep auto-backup
 
 # 🧹 **RETENTION AUTO CLEAN**
 
-Backup lama dibersihkan otomatis menggunakan:
-
 ```
 find /opt/auto-backup/backups -type f -mtime +RETENTION_DAYS -delete
 ```
 
 ---
 
-# 🔐 **ENCRYPT BACKUP (ZIP + PASSWORD)**
-
-Menu PRO menyediakan:
-
-```
-Encrypt latest backup
-```
-
-Menghasilkan file:
-
-```
-backup-xxx.zip
-```
-
----
-
 # 🩹 **RESTORE BACKUP**
 
-Menu PRO:
-
-```
-Restore dari backup
-```
-
-Fitur:
-
 * pilih file
-* preview isi (30 baris)
-* extract ke temp
-* rsync ke root (`/`)
-* konfirmasi dua kali
+* preview isi
+* extract temp
+* rsync ke root `/`
+* konfirmasi 2 tahap
 
 ---
 
