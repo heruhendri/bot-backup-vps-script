@@ -62,17 +62,12 @@ Data lebih ringkas:
 
 ```mermaid
 flowchart TD
-MongoDB Config → Multi Instance Loop
-      │
-      ├─> Parse user:pass@host:port/db1,db2
-      │
-      ├─> For each DB:
-      │       ├─> mongodump --db dbX
-      │       └─> save to temp
-      │
-      └─> If "all":
-              ├─> mongodump --authenticationDatabase admin
-              └─> save to temp
+    A["MongoDB Config"] --> B["Multi Instance"]
+    B --> C["DB Paths"]
+    B --> D["Port Mapping"]
+    B --> E["Systemd Service"]
+    E --> F["Monitoring Log"]
+    F --> G["Backup Rotation"]
 
 Final:
   → append to backup.tar.gz
