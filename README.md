@@ -90,13 +90,13 @@ Di dalamnya ada:
 Jalankan installer:
 
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/backup-mongo/install-backupvps-telegram.sh)
+bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/master/install-backupvps-telegram.sh)
 ```
 
 Atau versi branch (menu realtime):
 
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/backup-mongo/fix.sh)
+bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/master/fix.sh)
 ```
 
 Installer akan menanyakan:
