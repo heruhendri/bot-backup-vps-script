@@ -1072,7 +1072,7 @@ toggle_pg() {
 
 # ================== DATA ==================
 STATUS_SERVICE="ACTIVE"
-NEXT_SCHEDULE="03:00 WIB"
+NEXT_SCHEDULE="03:00WIB"
 LAST_BACKUP="backup-2025-12-01.tar.gz"
 TOTAL_BACKUP=27
 
