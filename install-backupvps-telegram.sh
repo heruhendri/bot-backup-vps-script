@@ -197,7 +197,7 @@ TMP_DIR="${INSTALL_DIR}/tmp-$DATE"
 
 mkdir -p "$TMP_DIR"
 
-# Set waktu mulai (taruh di paling awal proses backup)
+# Set waktu mulai
 START_TIME=$(date +%s)
 
 # backup folders
@@ -300,7 +300,7 @@ tar -czf "$FILE" -C "$TMP_DIR" . || (echo "[ERROR] tar failed"; exit 1)
 
 # ... proses backup berjalan di sini ...
 
-# Hitung durasi dan info file
+# Hitung durasi & info file
 END_TIME=$(date +%s)
 DURATION=$(( END_TIME - START_TIME ))
 FILE_SIZE=$(du -h "$FILE" | awk '{print $1}')
@@ -308,16 +308,18 @@ FILE_SIZE=$(du -h "$FILE" | awk '{print $1}')
 # Ambil nama VPS
 VPS_NAME=$(hostname 2>/dev/null || echo "Unknown-VPS")
 
-# Kirim backup ke Telegram
+# Buat caption multiline (tanpa markdown)
+CAPTION="Backup selesai dari VPS: ${VPS_NAME}
+Tanggal: $(date '+%Y-%m-%d %H:%M:%S')
+Durasi: ${DURATION} detik
+Ukuran file: ${FILE_SIZE}
+File: $(basename "$FILE")"
+
+# Kirim ke Telegram
 if [[ -n "${BOT_TOKEN:-}" && -n "${CHAT_ID:-}" ]]; then
     curl -s -F document=@"$FILE" \
-         -F caption=$(printf "📦 *Backup Selesai*\n\n🖥 VPS: *%s*\n📅 Tanggal: *%s*\n⏱ Durasi: *%s detik*\n📁 Ukuran File: *%s*\n📄 Nama File: *%s*\n" \
-              "$VPS_NAME" \
-              "$(date '+%Y-%m-%d %H:%M:%S')" \
-              "$DURATION" \
-              "$FILE_SIZE" \
-              "$(basename "$FILE")") \
-         "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}&parse_mode=Markdown" || true
+         -F caption="$CAPTION" \
+         "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}" || true
 else
     echo "[WARN] BOT_TOKEN/CHAT_ID kosong; melewatkan kirim ke Telegram"
 fi
