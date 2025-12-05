@@ -159,11 +159,11 @@ Jalankan installer:
 bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/master/install-backupvps-telegram.sh)
 ```
 
-Atau versi branch terbaru:
+<!-- Atau versi branch terbaru:
 
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/master/fix.sh)
-```
+``` -->
 
 ---
 
