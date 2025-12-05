@@ -1070,9 +1070,6 @@ toggle_pg() {
     pause
 }
 
-# Main menu
-while true; do
-    clear
 # Fungsi untuk ambil status service
 get_status_service() {
     # Contoh: cek service backup aktif atau tidak
@@ -1109,6 +1106,10 @@ get_total_backup() {
     COUNT=$(ls /opt/auto-backup/backups/*.tar.gz 2>/dev/null | wc -l)
     echo "${COUNT:-0}"
 }
+
+# Main menu
+while true; do
+    clear
 
 # ===================== LOOP REALTIME =====================
 while true; do
