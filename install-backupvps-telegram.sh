@@ -1089,7 +1089,7 @@ while true; do
     echo -e "${CYAN}========== BACKUP DASHBOARD BY HENDRI ==========${RESET}"
     echo
     echo -e " Status Service   : ${GREEN}${STATUS_SERVICE}${RESET}"
-    echo -e " Next Schedule    : ${NEXT_SCHEDULE}"
+    echo -e " Next Schedule    : ${next_run}"
     echo -e " Last Backup File : ${LAST_BACKUP}"
     echo -e " Total Backup     : ${TOTAL_BACKUP}"
     echo
