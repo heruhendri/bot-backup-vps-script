@@ -1090,12 +1090,12 @@ TOTAL_BACKUP="${TOTAL_BACKUP:-0}"                    # Total backup
 # ================== DASHBOARD ==================
 
     echo -e "${CYAN}========== BACKUP DASHBOARD BY HENDRI ==========${RESET}"
-    echo
-    echo -e " Status Service   : ${GREEN}${STATUS_SERVICE}${RESET}"
-    echo -e " Next Schedule    : ${NEXT_RUN}"
-    echo -e " Last Backup File : ${LAST_BACKUP}"
-    echo -e " Total Backup     : ${TOTAL_BACKUP}"
-    echo
+echo ""
+echo -e " Status Service   : ${GREEN}${STATUS_SERVICE}${RESET}"
+echo -e " Next Schedule    : ${YELLOW}${NEXT_RUN}${RESET}"
+echo -e " Last Backup File : ${RED}${LAST_BACKUP}${RESET}"
+echo -e " Total Backup     : ${BLUE}${TOTAL_BACKUP}${RESET}"
+echo ""
     echo "---------------------- MENU AKSI ---------------------------"
 echo -e "${BLUE}[1]  Lihat konfigurasi${RESET}"
 echo -e "${YELLOW}[2]  Edit BOT TOKEN${RESET}"
