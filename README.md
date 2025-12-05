@@ -59,7 +59,9 @@ Berikut diagram **MongoDB backup system**, :
 
 Data lebih ringkas:
 
-```
+
+```mermaid
+flowchart TD
 MongoDB Config → Multi Instance Loop
       │
       ├─> Parse user:pass@host:port/db1,db2
