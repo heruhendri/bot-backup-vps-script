@@ -1083,13 +1083,19 @@ while true; do
     CYAN="\e[96m"
     GREEN="\e[32m"
     RESET="\e[0m"
+# ------------------- Inisialisasi variabel -----------------
+STATUS_SERVICE="${STATUS_SERVICE:-ACTIVE}"           # Status service, default ACTIVE
+NEXT_RUN="${NEXT_RUN:-Belum ada jadwal}"             # Jadwal backup berikutnya
+LAST_BACKUP="${LAST_BACKUP:-Tidak ada}"             # File backup terakhir
+TOTAL_BACKUP="${TOTAL_BACKUP:-0}"                   # Total backup
+
 
 # ================== DASHBOARD ==================
 
     echo -e "${CYAN}========== BACKUP DASHBOARD BY HENDRI ==========${RESET}"
     echo
     echo -e " Status Service   : ${GREEN}${STATUS_SERVICE}${RESET}"
-    echo -e " Next Schedule    : $next_run"
+    echo -e " Next Schedule    : ${NEXT_RUN}"
     echo -e " Last Backup File : ${LAST_BACKUP}"
     echo -e " Total Backup     : ${TOTAL_BACKUP}"
     echo
