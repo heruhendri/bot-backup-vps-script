@@ -1070,6 +1070,8 @@ toggle_pg() {
     pause
 }
 
+# ================== DATA ==================
+STATUS_SERVICE="ACTIVE"
 
 # Main menu
 while true; do
@@ -1083,7 +1085,7 @@ while true; do
 
     echo -e "${CYAN}========== BACKUP DASHBOARD BY HENDRI ==========${RESET}"
     echo
-    echo -e " Status Service   : ${GREEN}${svc_active}${RESET}"
+    echo -e " Status Service   : ${GREEN}${STATUS_SERVICE}${RESET}"
     echo -e " Next Schedule    : ${NEXT_SCHEDULE}"
     echo -e " Last Backup File : ${LAST_BACKUP}"
     echo -e " Total Backup     : ${TOTAL_BACKUP}"
