@@ -68,11 +68,6 @@ flowchart TD
     B --> E["Systemd Service"]
     E --> F["Monitoring Log"]
     F --> G["Backup Rotation"]
-
-Final:
-  → append to backup.tar.gz
-  → send to Telegram (optional)
-  → cleanup
 ```
 
 ---
