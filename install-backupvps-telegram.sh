@@ -1127,7 +1127,6 @@ echo -e " Next Schedule    : ${YELLOW}${NEXT_RUN}${RESET}"
 echo -e " Last Backup File : ${RED}${LAST_BACKUP}${RESET}"
 echo -e " Total Backup     : ${BLUE}${TOTAL_BACKUP}${RESET}"
 echo ""
-# Main menu
     echo "---------------------- MENU AKSI ---------------------------"
 echo -e "${BLUE}[1]  Lihat konfigurasi${RESET}"
 echo -e "${YELLOW}[2]  Edit BOT TOKEN${RESET}"
