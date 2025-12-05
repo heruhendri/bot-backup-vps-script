@@ -94,7 +94,7 @@ Saat menjalankan:
 menu-bot-backup
 ```
 
-Tampilan dashboard baru:
+![Tampilan dashboard baru:](https://)
 
 ```
 ========== BACKUP DASHBOARD BY HENDRI ==========
