@@ -560,8 +560,8 @@ show_status_live() {
                 s=$(( diff%60 ))
                 echo "Time left      : $d hari $h jam $m menit $s detik"
 
-                last_epoch=$(journalctl -u auto-backup.service --output=short-unix -n 50 --no-pager \
-                    | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1 || true)
+last_epoch=$(awk '/\[BACKUP_DONE\]/ {print $2}' /var/log/auto-backup.log | tail -n1)
+
 
                 if [[ -z "$last_epoch" || "$last_epoch" -eq 0 ]]; then
                     echo "Progress       : (tidak tersedia)"
@@ -939,6 +939,7 @@ if [[ "$USE_PG" == "y" ]]; then
 fi
 
 tar -czf "$FILE" -C "$TMP_DIR" . || true
+echo "[BACKUP_DONE] $(date +%s)" >> /var/log/auto-backup.log
 curl -s -F document=@"$FILE" -F caption="Backup selesai: $(basename $FILE)" "https://api.telegram.org/bot$BOT_TOKEN/sendDocument?chat_id=$CHAT_ID" || true
 rm -rf "$TMP_DIR"
 find "$BACKUP_DIR" -type f -mtime +$RETENTION_DAYS -delete || true
