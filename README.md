@@ -164,9 +164,9 @@ Atau versi branch terbaru:
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/menu-bot/install-backupvps-telegram.sh)
 ```
-```bash
+<!-- ```bash
 bash <(curl -s https://raw.githubusercontent.com/heruhendri/Installer-Backup-Vps-Bot-Telegram/menu-bot/fixx.sh)
-```
+``` -->
 
 ---
 
