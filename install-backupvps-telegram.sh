@@ -196,10 +196,8 @@ FILE="$BACKUP_DIR/backup-$DATE.tar.gz"
 TMP_DIR="${INSTALL_DIR}/tmp-$DATE"
 
 mkdir -p "$TMP_DIR"
-
 # Set waktu mulai durasi backup
 START_TIME=$(date +%s)
-
 # backup folders
 IFS=',' read -r -a FOLDERS <<< "${FOLDERS_RAW:-}"
 for f in "${FOLDERS[@]}"; do
@@ -296,8 +294,6 @@ fi
 
 tar -czf "$FILE" -C "$TMP_DIR" . || (echo "[ERROR] tar failed"; exit 1)
 
-
-
 # Hitung durasi & info file
 END_TIME=$(date +%s)
 DURATION=$(( END_TIME - START_TIME ))
@@ -323,9 +319,6 @@ if [[ -n "${BOT_TOKEN:-}" && -n "${CHAT_ID:-}" ]]; then
 else
     echo "[WARN] BOT_TOKEN/CHAT_ID kosong; melewatkan kirim ke Telegram"
 fi
-
-
-
 
 # cleanup temp
 rm -rf "$TMP_DIR"
@@ -516,8 +509,8 @@ show_status_live() {
         echo "        STATUS BACKUP — REALTIME (Refresh 1 detik)"
         echo ""
 
-        GREEN="\e[32m"
-        BLUE="\e[34m"
+        GREEN="\e[92m"
+        BLUE="\e[96m"
         RESET="\e[0m"
 
         svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo "unknown")
@@ -559,15 +552,9 @@ show_status_live() {
                 m=$(( (diff%3600)/60 ))
                 s=$(( diff%60 ))
                 echo "Time left      : $d hari $h jam $m menit $s detik"
-last_epoch=$(journalctl -t auto-backup --output=short-unix -n 200 --no-pager \
-    | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1 2>/dev/null || echo 0)
 
-            
-            if [[ -n "$last_epoch" ]]; then
-                last_epoch=$(date -d "$last_epoch" +%s 2>/dev/null)
-            else
-                last_epoch=0
-            fi
+                last_epoch=$(journalctl -u auto-backup.service --output=short-unix -n 50 --no-pager \
+                    | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1 || true)
 
                 if [[ -z "$last_epoch" || "$last_epoch" -eq 0 ]]; then
                     echo "Progress       : (tidak tersedia)"
@@ -605,7 +592,7 @@ last_epoch=$(journalctl -t auto-backup --output=short-unix -n 200 --no-pager \
 
         echo ""
         echo "--- Log auto-backup.service (3 baris terakhir) ---"
-        journalctl -u auto-backup.service -n 3 --no-pager 2>/dev/null || true
+        journalctl -u auto-backup.service -n 3 --no-pager 2>/dev/null || echo "(log tidak tersedia)"
 
         echo ""
         echo "[Tekan CTRL+C untuk keluar realtime]"
@@ -947,14 +934,8 @@ fi
 tar -czf "$FILE" -C "$TMP_DIR" . || true
 curl -s -F document=@"$FILE" -F caption="Backup selesai: $(basename $FILE)" "https://api.telegram.org/bot$BOT_TOKEN/sendDocument?chat_id=$CHAT_ID" || true
 
-tar -czf "$FILE" -C "$TMP_DIR" . || true
-curl -s -F document=@"$FILE" ... || true
-
-echo "$(date +%s) Backup done" | systemd-cat -t auto-backup -p info  # ← TAMBAH INI
-
 rm -rf "$TMP_DIR"
 find "$BACKUP_DIR" -type f -mtime +$RETENTION_DAYS -delete || true
-
 EOR
     chmod +x "$RUNNER"
     echo "[OK] Backup runner dibuat/diupdate: $RUNNER"
