@@ -509,8 +509,8 @@ show_status_live() {
         echo "        STATUS BACKUP — REALTIME (Refresh 1 detik)"
         echo ""
 
-        GREEN="\e[32m"
-        BLUE="\e[34m"
+        GREEN="\e[92m"
+        BLUE="\e[96m"
         RESET="\e[0m"
 
         svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo "unknown")
@@ -1128,7 +1128,7 @@ get_total_backup() {
 
 # ===================== WARNA =====================
 BLUE="\e[96m"
-GREEN="\e[32m"
+GREEN="\e[92m"
 YELLOW="\e[93m"
 RED="\e[91m"
 CYAN="\e[36m"
