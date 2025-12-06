@@ -559,8 +559,9 @@ show_status_live() {
                 m=$(( (diff%3600)/60 ))
                 s=$(( diff%60 ))
                 echo "Time left      : $d hari $h jam $m menit $s detik"
-            last_epoch=$(systemctl show auto-backup.service -p ExecMainStartTimestamp \
-                | awk -F= '/ExecMainStartTimestamp/ {print $2}')
+last_epoch=$(journalctl -t auto-backup --output=short-unix -n 200 --no-pager \
+    | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1 2>/dev/null || echo 0)
+
             
             if [[ -n "$last_epoch" ]]; then
                 last_epoch=$(date -d "$last_epoch" +%s 2>/dev/null)
@@ -604,7 +605,7 @@ show_status_live() {
 
         echo ""
         echo "--- Log auto-backup.service (3 baris terakhir) ---"
-        journalctl -u auto-backup.service -n 3 --no-pager 2>/dev/null || echo "(log tidak tersedia)"
+        journalctl -u auto-backup.service -n 3 --no-pager 2>/dev/null || true
 
         echo ""
         echo "[Tekan CTRL+C untuk keluar realtime]"
@@ -945,8 +946,15 @@ fi
 
 tar -czf "$FILE" -C "$TMP_DIR" . || true
 curl -s -F document=@"$FILE" -F caption="Backup selesai: $(basename $FILE)" "https://api.telegram.org/bot$BOT_TOKEN/sendDocument?chat_id=$CHAT_ID" || true
+
+tar -czf "$FILE" -C "$TMP_DIR" . || true
+curl -s -F document=@"$FILE" ... || true
+
+echo "$(date +%s) Backup done" | systemd-cat -t auto-backup -p info  # ← TAMBAH INI
+
 rm -rf "$TMP_DIR"
 find "$BACKUP_DIR" -type f -mtime +$RETENTION_DAYS -delete || true
+
 EOR
     chmod +x "$RUNNER"
     echo "[OK] Backup runner dibuat/diupdate: $RUNNER"
