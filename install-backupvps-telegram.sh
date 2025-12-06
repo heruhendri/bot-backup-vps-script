@@ -559,28 +559,37 @@ show_status_live() {
                 h=$(( (diff%86400)/3600 ))
                 m=$(( (diff%3600)/60 ))
                 s=$(( diff%60 ))
-                echo "Time left      : $d hari $h jam $m menit $s detik"
+echo "Time left      : $d hari $h jam $m menit $s detik"
+
+# --- Ambil epoch backup terakhir dari log ---
 last_epoch=$(journalctl -t auto-backup --output=short-unix -n 200 --no-pager 2>/dev/null \
-    | awk '/Backup done/ {print $1; exit}' | cut -d'\.' -f1)
+    | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1)
 [[ -z "$last_epoch" ]] && last_epoch=0
-        if [[ -z "$lastfile" ]]; then
-            echo "Last backup    : (belum ada)"
-        else
-            lasttime=$(stat -c '%y' "$BACKUP_DIR/$lastfile" | cut -d'.' -f1)
-            echo -e "Last backup    : ${GREEN}$lastfile${RESET} ($lasttime)"
-        fi
 
-        echo ""
-        echo "--- Log auto-backup.service (3 baris terakhir) ---"
-        journalctl -u auto-backup.service -n 3 --no-pager 2>/dev/null || true || true
+# --- Hitung progress ---
+if (( last_epoch == 0 )); then
+    echo "Progress       : (tidak tersedia)"
+else
+    total_interval=$(( next_epoch - last_epoch ))
+    elapsed=$(( now_epoch - last_epoch ))
 
-        echo ""
-        echo "[Tekan CTRL+C untuk keluar realtime]"
-        sleep 1 || true
-    done
+    if (( total_interval <= 0 )); then
+        percent=100
+    else
+        percent=$(( elapsed * 100 / total_interval ))
+    fi
 
-    tput cnorm 2>/dev/null || true
-}
+    ((percent < 0)) && percent=0
+    ((percent > 100)) && percent=100
+
+    bars=$(( percent / 5 ))
+    bar=""
+    for ((i=1;i<=bars;i++)); do bar+="█"; done
+    while (( ${#bar} < 20 )); do bar+=" "; done
+
+    echo -e "Progress       : ${BLUE}[${bar}]${RESET} $percent%"
+fi
+
 
 # ---------- Folder / MySQL / PG / Mongo functions ----------
 add_folder() {
