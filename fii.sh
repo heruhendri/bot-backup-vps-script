@@ -197,6 +197,9 @@ TMP_DIR="${INSTALL_DIR}/tmp-$DATE"
 
 mkdir -p "$TMP_DIR"
 
+# Set waktu mulai durasi backup
+START_TIME=$(date +%s)
+
 # backup folders
 IFS=',' read -r -a FOLDERS <<< "${FOLDERS_RAW:-}"
 for f in "${FOLDERS[@]}"; do
@@ -293,14 +296,36 @@ fi
 
 tar -czf "$FILE" -C "$TMP_DIR" . || (echo "[ERROR] tar failed"; exit 1)
 
-# send to telegram (document)
+
+
+# Hitung durasi & info file
+END_TIME=$(date +%s)
+DURATION=$(( END_TIME - START_TIME ))
+FILE_SIZE=$(du -h "$FILE" | awk '{print $1}')
+
+# Ambil nama VPS
+VPS_NAME=$(hostname 2>/dev/null || echo "Unknown-VPS")
+
+# Buat caption dengan emoji (NON-MARKDOWN, aman)
+CAPTION="📦 Backup Selesai
+
+🖥 VPS: ${VPS_NAME}
+📅 Tanggal: $(date '+%Y-%m-%d %H:%M:%S')
+⏱ Durasi: ${DURATION} detik
+📁 Ukuran File: ${FILE_SIZE}
+📄 Nama File: $(basename "$FILE")"
+
+# Kirim ke Telegram
 if [[ -n "${BOT_TOKEN:-}" && -n "${CHAT_ID:-}" ]]; then
     curl -s -F document=@"$FILE" \
-         -F caption="Backup selesai: $(basename "$FILE")" \
+         -F caption="$CAPTION" \
          "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}" || true
 else
     echo "[WARN] BOT_TOKEN/CHAT_ID kosong; melewatkan kirim ke Telegram"
 fi
+
+
+
 
 # cleanup temp
 rm -rf "$TMP_DIR"
@@ -534,9 +559,15 @@ show_status_live() {
                 m=$(( (diff%3600)/60 ))
                 s=$(( diff%60 ))
                 echo "Time left      : $d hari $h jam $m menit $s detik"
+last_epoch=$(journalctl -t auto-backup --output=short-unix -n 200 --no-pager \
+    | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1 2>/dev/null || echo 0)
 
-                last_epoch=$(journalctl -u auto-backup.service --output=short-unix -n 50 --no-pager \
-                    | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1 || true)
+            
+            if [[ -n "$last_epoch" ]]; then
+                last_epoch=$(date -d "$last_epoch" +%s 2>/dev/null)
+            else
+                last_epoch=0
+            fi
 
                 if [[ -z "$last_epoch" || "$last_epoch" -eq 0 ]]; then
                     echo "Progress       : (tidak tersedia)"
@@ -574,7 +605,7 @@ show_status_live() {
 
         echo ""
         echo "--- Log auto-backup.service (3 baris terakhir) ---"
-        journalctl -u auto-backup.service -n 3 --no-pager 2>/dev/null || echo "(log tidak tersedia)"
+        journalctl -u auto-backup.service -n 3 --no-pager 2>/dev/null || true
 
         echo ""
         echo "[Tekan CTRL+C untuk keluar realtime]"
@@ -915,8 +946,15 @@ fi
 
 tar -czf "$FILE" -C "$TMP_DIR" . || true
 curl -s -F document=@"$FILE" -F caption="Backup selesai: $(basename $FILE)" "https://api.telegram.org/bot$BOT_TOKEN/sendDocument?chat_id=$CHAT_ID" || true
+
+tar -czf "$FILE" -C "$TMP_DIR" . || true
+curl -s -F document=@"$FILE" ... || true
+
+echo "$(date +%s) Backup done" | systemd-cat -t auto-backup -p info  # ← TAMBAH INI
+
 rm -rf "$TMP_DIR"
 find "$BACKUP_DIR" -type f -mtime +$RETENTION_DAYS -delete || true
+
 EOR
     chmod +x "$RUNNER"
     echo "[OK] Backup runner dibuat/diupdate: $RUNNER"
@@ -1070,43 +1108,105 @@ toggle_pg() {
     pause
 }
 
+# Fungsi untuk ambil status service
+get_status_service() {
+    # Contoh: cek service backup aktif atau tidak
+    if systemctl is-active --quiet auto-backup.service; then
+        echo "ACTIVE"
+    else
+        echo "INACTIVE"
+    fi
+}
 
-# Main menu
+# Fungsi untuk ambil jadwal berikutnya
+get_next_schedule() {
+    # Contoh: ambil jadwal systemd timer (ubah sesuai timer kamu)
+    NEXT=$(systemctl list-timers --no-legend auto-backup.timer | awk 'NR==1 {print $1, $2}')
+    if [[ -z "$NEXT" ]]; then
+        echo "Belum ada jadwal"
+    else
+        echo "$NEXT"
+    fi
+}
+
+# Fungsi untuk ambil backup terakhir
+get_last_backup() {
+    LAST=$(ls -t /opt/auto-backup/backups/*.tar.gz 2>/dev/null | head -n1)
+    if [[ -z "$LAST" ]]; then
+        echo "Tidak ada"
+    else
+        echo "$(basename "$LAST")"
+    fi
+}
+
+# Fungsi untuk hitung total backup
+get_total_backup() {
+    COUNT=$(ls /opt/auto-backup/backups/*.tar.gz 2>/dev/null | wc -l)
+    echo "${COUNT:-0}"
+}
+
+# ===================== WARNA =====================
+BLUE="\e[96m"
+GREEN="\e[92m"
+YELLOW="\e[93m"
+RED="\e[91m"
+CYAN="\e[36m"
+RESET="\e[0m"
+
+# ===================== LOOP REALTIME =====================
 while true; do
     clear
-    echo "$WATERMARK_HEADER"
-    echo ""
-    echo "=============================================="
-    echo "   AUTO BACKUP — MENU PRO (Telegram VPS)"
-    echo "=============================================="
-    echo "1) Lihat konfigurasi"
-    echo "2) Edit BOT TOKEN"
-    echo "3) Edit CHAT ID"
-    echo "4) Tambah folder backup"
-    echo "5) Hapus folder backup"
-    echo "6) Tambah konfigurasi MySQL"
-    echo "7) Edit konfigurasi MySQL"
-    echo "8) Hapus konfigurasi MySQL"
-    echo "9) Tambah konfigurasi MongoDB"
-    echo "10) Edit konfigurasi MongoDB"
-    echo "11) Hapus konfigurasi MongoDB"
-    echo "12) Edit PostgreSQL settings & test dump"
-    echo "13) Ubah timezone"
-    echo "14) Ubah retention days"
-    echo "15) Ubah jadwal backup (OnCalendar helper)"
-    echo "16) Test backup sekarang"
-    echo "17) Restore dari backup"
-    echo "18) Rebuild / Repair installer files (service/timer/runner)"
-    echo "19) Encrypt latest backup (zip with password)"
-    echo "20) Restart service & timer"
-    echo "21) Simpan config"
-    echo "22) Status (service / last backup / next run)"
-    echo "23) Status Realtime (live monitor)"
-    echo "24) Gunakan MySQL (use_mysql)"
-    echo "25) Gunakan MongoDB (use_mongo)"
-    echo "26) Gunakan PostgreSQL (use_pg)"
-    echo "0) Keluar (tanpa simpan)"
-    echo "----------------------------------------------"
+    STATUS_SERVICE=$(get_status_service)
+    NEXT_RUN=$(get_next_schedule)
+    LAST_BACKUP=$(get_last_backup)
+    TOTAL_BACKUP=$(get_total_backup)
+
+
+# ================== DASHBOARD ==================
+
+echo -e "${CYAN}========== BACKUP DASHBOARD BY HENDRI ==========${RESET}"
+echo ""
+echo -e " Status Service   : ${GREEN}${STATUS_SERVICE}${RESET}"
+echo -e " Next Schedule    : ${YELLOW}${NEXT_RUN}${RESET}"
+echo -e " Last Backup File : ${RED}${LAST_BACKUP}${RESET}"
+echo -e " Total Backup     : ${BLUE}${TOTAL_BACKUP}${RESET}"
+echo ""
+echo "---------------------- MENU AKSI ---------------------------"
+echo -e "${BLUE}[1]  Lihat konfigurasi${RESET}"
+echo -e "${YELLOW}[2]  Edit BOT TOKEN${RESET}"
+echo -e "${YELLOW}[3]  Edit CHAT ID${RESET}"
+echo -e "${YELLOW}[4]  Tambah folder backup${RESET}"
+echo -e "${YELLOW}[5]  Hapus folder backup${RESET}"
+echo -e "${YELLOW}[6]  Tambah konfigurasi MySQL${RESET}"
+echo -e "${YELLOW}[7]  Edit konfigurasi MySQL${RESET}"
+echo -e "${YELLOW}[8]  Hapus konfigurasi MySQL${RESET}"
+echo -e "${YELLOW}[9]  Tambah konfigurasi MongoDB${RESET}"
+echo -e "${YELLOW}[10] Edit konfigurasi MongoDB${RESET}"
+echo -e "${YELLOW}[11] Hapus konfigurasi MongoDB${RESET}"
+echo -e "${YELLOW}[12] Edit PostgreSQL settings & test dump${RESET}"
+echo -e "${YELLOW}[13] Ubah timezone${RESET}"
+echo -e "${YELLOW}[14] Ubah retention days${RESET}"
+echo -e "${YELLOW}[15] Ubah jadwal backup (OnCalendar helper)${RESET}"
+
+# ---------------- Backup / Restore ----------------
+echo -e "${GREEN}[16] Test backup sekarang${RESET}"
+echo -e "${GREEN}[17] Restore dari backup${RESET}"
+echo -e "${GREEN}[18] Rebuild / Repair installer files (service/timer/runner)${RESET}"
+echo -e "${GREEN}[19] Encrypt latest backup (zip with password)${RESET}"
+
+# ---------------- Service / Config ----------------
+echo -e "${RED}[20] Restart service & timer${RESET}"
+echo -e "${BLUE}[21] Simpan config${RESET}"
+echo -e "${BLUE}[22] Status (service / last backup / next run)${RESET}"
+echo -e "${BLUE}[23] Status Realtime (live monitor)${RESET}"
+echo -e "${BLUE}[24] Gunakan MySQL (use_mysql)${RESET}"
+echo -e "${BLUE}[25] Gunakan MongoDB (use_mongo)${RESET}"
+echo -e "${BLUE}[26] Gunakan PostgreSQL (use_pg)${RESET}"
+echo -e "${RED}[0]  Keluar (tanpa simpan)${RESET}"
+
+echo ""
+echo -e "${BLUE}============================================================${RESET}"
+
     read -p "Pilih menu: " opt
 
     case "$opt" in

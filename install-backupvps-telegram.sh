@@ -196,7 +196,8 @@ FILE="$BACKUP_DIR/backup-$DATE.tar.gz"
 TMP_DIR="${INSTALL_DIR}/tmp-$DATE"
 
 mkdir -p "$TMP_DIR"
-
+# Set waktu mulai durasi backup
+START_TIME=$(date +%s)
 # backup folders
 IFS=',' read -r -a FOLDERS <<< "${FOLDERS_RAW:-}"
 for f in "${FOLDERS[@]}"; do
@@ -293,10 +294,27 @@ fi
 
 tar -czf "$FILE" -C "$TMP_DIR" . || (echo "[ERROR] tar failed"; exit 1)
 
-# send to telegram (document)
+# Hitung durasi & info file
+END_TIME=$(date +%s)
+DURATION=$(( END_TIME - START_TIME ))
+FILE_SIZE=$(du -h "$FILE" | awk '{print $1}')
+
+# Ambil nama VPS
+VPS_NAME=$(hostname 2>/dev/null || echo "Unknown-VPS")
+
+# Buat caption dengan emoji (NON-MARKDOWN, aman)
+CAPTION="📦 Backup Selesai
+
+🖥 VPS: ${VPS_NAME}
+📅 Tanggal: $(date '+%Y-%m-%d %H:%M:%S')
+⏱ Durasi: ${DURATION} detik
+📁 Ukuran File: ${FILE_SIZE}
+📄 Nama File: $(basename "$FILE")"
+
+# Kirim ke Telegram
 if [[ -n "${BOT_TOKEN:-}" && -n "${CHAT_ID:-}" ]]; then
     curl -s -F document=@"$FILE" \
-         -F caption="Backup selesai: $(basename "$FILE")" \
+         -F caption="$CAPTION" \
          "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}" || true
 else
     echo "[WARN] BOT_TOKEN/CHAT_ID kosong; melewatkan kirim ke Telegram"
@@ -491,8 +509,8 @@ show_status_live() {
         echo "        STATUS BACKUP — REALTIME (Refresh 1 detik)"
         echo ""
 
-        GREEN="\e[32m"
-        BLUE="\e[34m"
+        GREEN="\e[92m"
+        BLUE="\e[96m"
         RESET="\e[0m"
 
         svc_active=$(systemctl is-active auto-backup.service 2>/dev/null || echo "unknown")
@@ -915,6 +933,7 @@ fi
 
 tar -czf "$FILE" -C "$TMP_DIR" . || true
 curl -s -F document=@"$FILE" -F caption="Backup selesai: $(basename $FILE)" "https://api.telegram.org/bot$BOT_TOKEN/sendDocument?chat_id=$CHAT_ID" || true
+
 rm -rf "$TMP_DIR"
 find "$BACKUP_DIR" -type f -mtime +$RETENTION_DAYS -delete || true
 EOR
