@@ -320,6 +320,7 @@ if [[ -n "${BOT_TOKEN:-}" && -n "${CHAT_ID:-}" ]]; then
     curl -s -F document=@"$FILE" \
          -F caption="$CAPTION" \
          "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument?chat_id=${CHAT_ID}" || true
+logger -t auto-backup "Backup done at $(date +%s)"
 else
     echo "[WARN] BOT_TOKEN/CHAT_ID kosong; melewatkan kirim ke Telegram"
 fi
@@ -559,43 +560,9 @@ show_status_live() {
                 m=$(( (diff%3600)/60 ))
                 s=$(( diff%60 ))
                 echo "Time left      : $d hari $h jam $m menit $s detik"
-last_epoch=$(journalctl -t auto-backup --output=short-unix -n 200 --no-pager \
-    | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1 2>/dev/null || echo 0)
-
-            
-            if [[ -n "$last_epoch" ]]; then
-                last_epoch=$(date -d "$last_epoch" +%s 2>/dev/null)
-            else
-                last_epoch=0
-            fi
-
-                if [[ -z "$last_epoch" || "$last_epoch" -eq 0 ]]; then
-                    echo "Progress       : (tidak tersedia)"
-                else
-                    total_interval=$(( next_epoch - last_epoch ))
-                    elapsed=$(( now_epoch - last_epoch ))
-
-                    if (( total_interval <= 0 )); then
-                        percent=100
-                    else
-                        percent=$(( elapsed * 100 / total_interval ))
-                    fi
-
-                    ((percent < 0)) && percent=0
-                    ((percent > 100)) && percent=100
-
-                    bars=$(( percent / 5 ))
-                    bar=""
-                    for ((i=1;i<=bars;i++)); do bar+="█"; done
-                    while (( ${#bar} < 20 )); do bar+=" "; done
-
-                    echo -e "Progress       : ${BLUE}[${bar}]${RESET} $percent%"
-                fi
-            fi
-        fi
-
-        BACKUP_DIR="$INSTALL_DIR/backups"
-        lastfile=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -n1 || true)
+last_epoch=$(journalctl -t auto-backup --output=short-unix -n 200 --no-pager 2>/dev/null \
+    | awk '/Backup done/ {print $1; exit}' | cut -d'\.' -f1)
+[[ -z "$last_epoch" ]] && last_epoch=0
         if [[ -z "$lastfile" ]]; then
             echo "Last backup    : (belum ada)"
         else
@@ -605,7 +572,7 @@ last_epoch=$(journalctl -t auto-backup --output=short-unix -n 200 --no-pager \
 
         echo ""
         echo "--- Log auto-backup.service (3 baris terakhir) ---"
-        journalctl -u auto-backup.service -n 3 --no-pager 2>/dev/null || true
+        journalctl -u auto-backup.service -n 3 --no-pager 2>/dev/null || true || true
 
         echo ""
         echo "[Tekan CTRL+C untuk keluar realtime]"
@@ -946,9 +913,11 @@ fi
 
 tar -czf "$FILE" -C "$TMP_DIR" . || true
 curl -s -F document=@"$FILE" -F caption="Backup selesai: $(basename $FILE)" "https://api.telegram.org/bot$BOT_TOKEN/sendDocument?chat_id=$CHAT_ID" || true
+logger -t auto-backup "Backup done at $(date +%s)"
 
 tar -czf "$FILE" -C "$TMP_DIR" . || true
 curl -s -F document=@"$FILE" ... || true
+logger -t auto-backup "Backup done at $(date +%s)"
 
 echo "$(date +%s) Backup done" | systemd-cat -t auto-backup -p info  # ← TAMBAH INI
 
