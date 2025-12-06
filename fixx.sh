@@ -1128,7 +1128,7 @@ get_total_backup() {
 
 # ===================== WARNA =====================
 BLUE="\e[96m"
-GREEN="\e[92m"
+GREEN="\e[32m"
 YELLOW="\e[93m"
 RED="\e[91m"
 CYAN="\e[36m"
