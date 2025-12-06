@@ -565,7 +565,7 @@ echo "Time left      : $d hari $h jam $m menit $s detik"
 last_epoch=$(journalctl -t auto-backup --output=short-unix -n 200 --no-pager 2>/dev/null \
     | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1)
 [[ -z "$last_epoch" ]] && last_epoch=0
-
+fi
 # --- Hitung progress ---
 if (( last_epoch == 0 )); then
     echo "Progress       : (tidak tersedia)"
