@@ -559,9 +559,14 @@ show_status_live() {
                 m=$(( (diff%3600)/60 ))
                 s=$(( diff%60 ))
                 echo "Time left      : $d hari $h jam $m menit $s detik"
-
-                last_epoch=$(journalctl -u auto-backup.service --output=short-unix -n 50 --no-pager \
-                    | awk '/Backup done/ {print $1; exit}' | cut -d'.' -f1 || true)
+            last_epoch=$(systemctl show auto-backup.service -p ExecMainStartTimestamp \
+                | awk -F= '/ExecMainStartTimestamp/ {print $2}')
+            
+            if [[ -n "$last_epoch" ]]; then
+                last_epoch=$(date -d "$last_epoch" +%s 2>/dev/null)
+            else
+                last_epoch=0
+            fi
 
                 if [[ -z "$last_epoch" || "$last_epoch" -eq 0 ]]; then
                     echo "Progress       : (tidak tersedia)"
